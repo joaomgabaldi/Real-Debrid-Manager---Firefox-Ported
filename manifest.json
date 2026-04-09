@@ -2,7 +2,7 @@
    "manifest_version": 3,
    "name": "RD Manager",
    "version": "1.0.1",
-   "description": "Manage all your Real-Debrid downloads in one simple window.",
+   "description": "Gerencie todos os seus downloads do Real-Debrid em uma janela simples.",
    "browser_specific_settings": {
       "gecko": {
          "id": "rd-manager@seu-dominio.com",
