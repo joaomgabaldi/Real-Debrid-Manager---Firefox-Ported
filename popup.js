@@ -1,29 +1,37 @@
 /* ============================================
-   Real-Debrid Manager — Chrome Extension Logic
+   Real-Debrid Manager — Firefox Extension Logic
    ============================================ */
 
-const API_BASE = 'https://api.real-debrid.com/rest/1.0'; // NOTE: must match API_BASE in background.js
+const API_BASE = 'https://api.real-debrid.com/rest/1.0';
+
+// ---- DOM Helper (Replaces innerHTML completely) ----
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'className') e.className = v;
+    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (v !== undefined && v !== null) e.setAttribute(k, String(v));
+  }
+  children.forEach(c => {
+    if (c === null || c === undefined) return;
+    e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c)));
+  });
+  return e;
+}
 
 // ---- State ----
 let apiKey = '';
 let currentTab = 'all';
-let currentTypeFilter = null; // independent type overlay: 'torrent', 'web', or null
+let currentTypeFilter = null;
 let searchQuery = '';
-let ageFilterDays = null; // null = off, 1/7/30 = older than N days
+let ageFilterDays = null;
 let allDownloads = [];
-let notifications = []; // local notifications from chrome.storage
-let autoRefreshInterval = null;
-const AUTO_REFRESH_MS = 5000;
-let currentFiltered = []; // Vai guardar a lista final (após buscas/filtros)
-let visibleCount = 50;    // Quantos itens vamos desenhar na tela por vez
+let notifications = [];
+let visibleCount = 50;
+let currentFiltered = [];
+let cachedNotificationsEnabled = true;
 
-// ---- DOM element map for download items ----
-const dlElementMap = new Map(); // id string → <li> element
-
-// ---- Cached storage values ----
-let cachedNotificationsEnabled = true;  // default on
-
-// ---- DOM refs ----
+const dlElementMap = new Map();
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -33,11 +41,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadCachedStorageValues();
   bindEvents();
   if (apiKey) {
-    // Load cached data first for instant display
     await loadCachedData();
-    // Load local notifications from storage
     await loadLocalNotifications();
-    // Fetch fresh downloads and user info in background
     refreshInBackground();
     fetchUserInfo();
   } else {
@@ -45,25 +50,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// Explicitly stop the auto-refresh interval when the popup is closed.
-// The popup context is destroyed on close anyway, so this is a no-op today —
-// but it prevents a real leak if the UI is ever promoted to a side panel
-// or persistent window, where the page survives across "closes".
-window.addEventListener('pagehide', () => {
-  stopAutoRefresh();
-});
+window.addEventListener('pagehide', () => stopAutoRefresh());
 
 // ---- Cached storage sync ----
 async function loadCachedStorageValues() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['rd_notifications_enabled'], (data) => {
-      cachedNotificationsEnabled = data.rd_notifications_enabled !== false;
-      resolve();
-    });
+  return browser.storage.local.get(['rd_notifications_enabled']).then((data) => {
+    cachedNotificationsEnabled = data.rd_notifications_enabled !== false;
   });
 }
 
-chrome.storage.onChanged.addListener((changes, area) => {
+browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if ('rd_notifications_enabled' in changes) {
     cachedNotificationsEnabled = changes.rd_notifications_enabled.newValue !== false;
@@ -75,78 +71,91 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 // ---- Cache Management ----
 async function loadCachedData() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['rd_cached_downloads', 'rd_cached_user', 'rd_cleared_ids'], (data) => {
-      if (data.rd_cached_downloads && data.rd_cached_downloads.length > 0) {
-        allDownloads = data.rd_cached_downloads;
-        renderDownloads();
-      }
-      if (data.rd_cached_user) {
-        showUserBar(data.rd_cached_user);
-      }
-      if (!data.rd_cached_downloads || data.rd_cached_downloads.length === 0) {
-        showState('loading');
-      }
-      resolve();
-    });
+  return browser.storage.local.get(['rd_cached_downloads', 'rd_cached_user']).then((data) => {
+    if (data.rd_cached_downloads && data.rd_cached_downloads.length > 0) {
+      allDownloads = data.rd_cached_downloads;
+      renderDownloads();
+    }
+    if (data.rd_cached_user) {
+      showUserBar(data.rd_cached_user);
+    }
+    if (!data.rd_cached_downloads || data.rd_cached_downloads.length === 0) {
+      showState('loading');
+    }
   });
 }
 
-
 function cacheData(downloads) {
-  chrome.storage.local.set({
-    rd_cached_downloads: downloads,
-  });
+  browser.storage.local.set({ rd_cached_downloads: downloads });
 }
 
 function refreshInBackground() {
   const btn = $('#btn-refresh');
-  if (btn.classList.contains('syncing')) return;
+  if (btn.classList.contains('syncing')) return Promise.resolve();
   
   btn.classList.add('syncing');
-  
-  // Passamos "true" para avisar que é um sync silencioso
-  fetchAll(true).finally(() => {
+  return fetchAll(true).finally(() => {
     btn.classList.remove('syncing');
     btn.classList.add('synced');
-    
-    setTimeout(() => {
-      btn.classList.remove('synced');
-    }, 1500);
+    setTimeout(() => btn.classList.remove('synced'), 1500);
   });
 }
 
+// ---- Polling Decay Logic ----
+let autoRefreshTimer = null;
+let refreshDecayCount = 0;
+const BASE_REFRESH_MS = 5000;
+const MAX_REFRESH_MS = 60000;
+
 function startAutoRefresh() {
-  if (autoRefreshInterval) return;
-  autoRefreshInterval = setInterval(() => {
-    if (allDownloads.some(d => !isCompleted(d))) {
-      refreshInBackground();
-    } else {
-      stopAutoRefresh();
-    }
-  }, AUTO_REFRESH_MS);
+  if (autoRefreshTimer) return;
+  scheduleNextRefresh();
 }
 
 function stopAutoRefresh() {
-  if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
+  if (autoRefreshTimer) {
+    clearTimeout(autoRefreshTimer);
+    autoRefreshTimer = null;
   }
+  refreshDecayCount = 0;
+}
+
+function scheduleNextRefresh() {
+  const delay = Math.min(MAX_REFRESH_MS, BASE_REFRESH_MS * Math.pow(1.5, refreshDecayCount));
+  autoRefreshTimer = setTimeout(async () => {
+    if (!allDownloads.some(d => !isCompleted(d))) {
+      stopAutoRefresh();
+      return;
+    }
+
+    const btn = $('#btn-refresh');
+    if (btn && btn.classList.contains('syncing')) {
+      scheduleNextRefresh();
+      return;
+    }
+
+    const oldHash = allDownloads.map(d => d.progress).join(',');
+    await fetchAll(true);
+    const newHash = allDownloads.map(d => d.progress).join(',');
+
+    if (oldHash === newHash) refreshDecayCount++;
+    else refreshDecayCount = 0;
+
+    if (allDownloads.some(d => !isCompleted(d))) scheduleNextRefresh();
+    else stopAutoRefresh();
+  }, delay);
 }
 
 // ---- Settings ----
 async function loadSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['rd_api_key', 'rd_theme', 'rd_hover_lift', 'rd_accent_color', 'rd_max_height'], (data) => {
-      apiKey = data.rd_api_key || '';
-      const theme = data.rd_theme || 'dark';
-      document.documentElement.setAttribute('data-theme', theme);
-      const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
-      document.documentElement.setAttribute('data-hover-lift', hoverLift);
-      if (data.rd_accent_color) applyAccentColor(data.rd_accent_color);
-      applyMaxHeight(data.rd_max_height || 400);
-      resolve();
-    });
+  return browser.storage.local.get(['rd_api_key', 'rd_theme', 'rd_hover_lift', 'rd_accent_color', 'rd_max_height']).then((data) => {
+    apiKey = data.rd_api_key || '';
+    const theme = data.rd_theme || 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+    const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
+    document.documentElement.setAttribute('data-hover-lift', hoverLift);
+    if (data.rd_accent_color) applyAccentColor(data.rd_accent_color);
+    applyMaxHeight(data.rd_max_height || 400);
   });
 }
 
@@ -156,18 +165,18 @@ function applyMaxHeight(px) {
 
 function saveApiKey(key) {
   apiKey = key;
-  chrome.storage.local.set({ rd_api_key: key });
+  browser.storage.local.set({ rd_api_key: key });
 }
 
 function saveTheme(theme) {
-  chrome.storage.local.set({ rd_theme: theme });
+  browser.storage.local.set({ rd_theme: theme });
 }
 
 async function trackId(id) {
-  const { rd_tracked_ids } = await chrome.storage.local.get('rd_tracked_ids');
+  const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
   const tracked = new Set(rd_tracked_ids || []);
   tracked.add(String(id));
-  await chrome.storage.local.set({ rd_tracked_ids: [...tracked] });
+  await browser.storage.local.set({ rd_tracked_ids: [...tracked] });
 }
 
 // ---- Accent color customisation ----
@@ -219,65 +228,45 @@ function clearAccentColor() {
 }
 
 // ---- Events ----
-let deleteHoldTimer = null;
 let deleteAllHoldTimer = null;
 
 function bindEvents() {
-  // Theme toggle
   $('#btn-theme').addEventListener('click', () => {
     const html = document.documentElement;
     const current = html.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     saveTheme(next);
-    chrome.storage.local.get('rd_accent_color', (data) => {
+    browser.storage.local.get('rd_accent_color').then((data) => {
       if (data.rd_accent_color) applyAccentColor(data.rd_accent_color);
     });
   });
 
-  // Logo icon opens dashboard
   $('.logo-icon').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://real-debrid.com/torrents', active: true });
+    browser.tabs.create({ url: 'https://real-debrid.com/torrents', active: true });
   });
 
-  // Ko-fi support link
   $('#btn-kofi').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://ko-fi.com/toolsrf', active: true });
+    browser.tabs.create({ url: 'https://ko-fi.com/toolsrf', active: true });
   });
 
-  // Settings (API key)
   $('#btn-settings').addEventListener('click', showApiKeyModal);
   $('#btn-setup-api').addEventListener('click', showApiKeyModal);
-
-  // Notifications
   $('#btn-notifications').addEventListener('click', showNotificationsModal);
-
-  // Add Torrent
   $('#btn-add-torrent').addEventListener('click', showTorrentModal);
-
-  // Add Web Link
   $('#btn-add-webdl').addEventListener('click', showWebLinkModal);
 
-  // Refresh
   $('#btn-refresh').addEventListener('click', () => {
-    const btn = $('#btn-refresh');
-    // Don't trigger if already syncing
-    if (btn.classList.contains('syncing')) return;
+    if ($('#btn-refresh').classList.contains('syncing')) return;
     refreshInBackground();
   });
 
-  // Type cycle button — independent overlay on status tabs
   const cycleBtn = $('#tab-type-cycle');
-  const cycleStates = [
-    { type: 'torrent', label: 'TOR ↻' },
-    { type: 'web',      label: 'WEB ↻' },
-  ];
-  let cycleIndex = -1; // -1 = inactive
+  const cycleStates = [ { type: 'torrent', label: 'TOR ↻' }, { type: 'web', label: 'WEB ↻' } ];
+  let cycleIndex = -1;
 
   cycleBtn.addEventListener('click', () => {
     cycleIndex = (cycleIndex + 1) % (cycleStates.length + 1);
-
-    // Reset back to "Type" after the last state
     if (cycleIndex === cycleStates.length) {
       cycleIndex = -1;
       cycleBtn.textContent = 'Type';
@@ -285,35 +274,30 @@ function bindEvents() {
       delete cycleBtn.dataset.cycleType;
       cycleBtn.classList.remove('active');
       currentTypeFilter = null;
-	  visibleCount = 50;
+      visibleCount = 50;
       renderDownloads();
       return;
     }
-
     const state = cycleStates[cycleIndex];
     cycleBtn.classList.add('active');
     cycleBtn.dataset.cycleState = 'active';
     cycleBtn.dataset.cycleType = state.type;
     cycleBtn.textContent = state.label;
     currentTypeFilter = state.type;
-	visibleCount = 50;
+    visibleCount = 50;
     renderDownloads();
   });
 
- // Tabs (excluding the cycle button and delete-all, handled separately)
   $$('.tab:not(#tab-type-cycle):not(#btn-delete-all)').forEach((tab) => {
     tab.addEventListener('click', () => {
-      // Don't reset the type filter when switching status tabs
       $$('.tab:not(#tab-type-cycle):not(#btn-delete-all)').forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
       currentTab = tab.dataset.tab;
-
       visibleCount = 50;
       renderDownloads();
     });
   });
 
-  // Delete All (hold 2s)
   const deleteAllBtn = $('#btn-delete-all');
   deleteAllBtn.addEventListener('mousedown', () => {
     if (!apiKey || allDownloads.length === 0) return;
@@ -336,14 +320,12 @@ function bindEvents() {
   deleteAllBtn.addEventListener('mouseup', cancelDeleteAll);
   deleteAllBtn.addEventListener('mouseleave', cancelDeleteAll);
 
-// Search input
   $('#search-input').addEventListener('input', (e) => {
     searchQuery = e.target.value.toLowerCase().trim();
-    visibleCount = 50; // Reseta o Infinite Scroll a cada nova letra digitada!
+    visibleCount = 50;
     renderDownloads();
   });
 
-  // Age filter dropdown
   const ageBtn = $('#btn-age-filter');
   const ageMenu = $('#age-filter-menu');
 
@@ -363,86 +345,67 @@ function bindEvents() {
 
   $$('.age-filter-option').forEach(opt => {
     opt.addEventListener('click', () => {
-      const days = opt.dataset.age ? parseInt(opt.dataset.age) : null;
-      ageFilterDays = days;
+      ageFilterDays = opt.dataset.age ? parseInt(opt.dataset.age) : null;
       updateAgeFilterUI();
       ageMenu.classList.add('hidden');
       ageBtn.classList.remove('open');
-	  visibleCount = 50;
+      visibleCount = 50;
       renderDownloads();
     });
   });
 
-  // Modal close
   $('#modal-close').addEventListener('click', closeModal);
   $('#modal-overlay').addEventListener('click', (e) => {
     if (e.target === $('#modal-overlay')) closeModal();
   });
 
-// Download list event delegation
   $('#download-list').addEventListener('click', handleListClick);
-  // APAGUE ESTAS 3 LINHAS ABAIXO:
-  // $('#download-list').addEventListener('mousedown', handleDeleteHoldStart);
-  // $('#download-list').addEventListener('mouseup', handleDeleteHoldEnd);
-  // $('#download-list').addEventListener('mouseleave', handleDeleteHoldEnd, true);
-  // Infinite Scroll - Escuta a rolagem da lista
+
   $('#downloads-container').addEventListener('scroll', (e) => {
     const el = e.target;
-    // Se a distância para o final for menor que 100px...
     if (el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
-      // E ainda tivermos itens escondidos no Array filtrado...
       if (visibleCount < currentFiltered.length) {
-        visibleCount += 50; // Libera mais 50
-        renderDownloads();  // Pede para desenhar
+        visibleCount += 50;
+        renderDownloads();
       }
     }
   });
 }
 
 function handleListClick(e) {
-  // Handle download button in header
   const dlBtn = e.target.closest('.dl-download-btn');
   if (dlBtn) {
     downloadFile(dlBtn.dataset.type, dlBtn.dataset.id);
     return;
   }
 
-// Handle delete button - click to delete
   const deleteBtn = e.target.closest('.dl-delete-btn');
   if (deleteBtn) {
     deleteDownload(deleteBtn.dataset.type, deleteBtn.dataset.id);
     return;
   }
 
-  // Clicking anywhere on a file row triggers the download
   const fileItem = e.target.closest('.dl-file-item:not(.dl-file-info)');
   if (fileItem) {
     const btn = fileItem.querySelector('.dl-file-download');
-    if (btn) {
-      downloadFile(btn.dataset.type, btn.dataset.id);
-    }
+    if (btn) downloadFile(btn.dataset.type, btn.dataset.id);
     return;
   }
 
-  // Collapse/expand only when clicking outside the file list
   const item = e.target.closest('.dl-item');
   if (item && !e.target.closest('.dl-expanded-content')) {
     const isExpanding = !item.classList.contains('expanded');
     item.classList.toggle('expanded');
-
-    // Lazy-load torrent file info from RD when expanding a completed torrent with no files or links
     if (isExpanding) {
       const dlId = item.dataset.id;
       const dl = allDownloads.find(d => String(d.id) === dlId);
-      if (dl && dl._type === 'torrent' && isCompleted(dl)
-        && ((dl.files || []).length === 0 || (dl.links || []).length === 0)) {
+      if (dl && dl._type === 'torrent' && isCompleted(dl) && ((dl.files || []).length === 0 || (dl.links || []).length === 0)) {
         fetchTorrentFiles(dl, item);
       }
     }
   }
 }
 
-// Parse RD /torrents/info response into our internal files/links format
 function parseTorrentInfo(info) {
   const selectedFiles = (info.files || []).filter(f => f.selected === 1);
   return {
@@ -456,7 +419,6 @@ function parseTorrentInfo(info) {
   };
 }
 
-// Lazy-fetch torrent file details when expanding (fallback if preload missed it)
 async function fetchTorrentFiles(dl, itemEl) {
   try {
     const info = await apiGet(`/torrents/info/${dl.id}`);
@@ -466,35 +428,23 @@ async function fetchTorrentFiles(dl, itemEl) {
     dl.links = parsed.links;
     dl.files = parsed.files;
 
-    // Update the expanded content in the DOM
     const existingExpanded = itemEl.querySelector('.dl-expanded-content');
     const newExpanded = renderExpandedContent(dl);
     if (existingExpanded) {
       existingExpanded.replaceWith(newExpanded);
     }
     itemEl.dataset.fileCount = String(dl.files.length);
-
     cacheData(allDownloads);
   } catch (err) {
     console.error('Failed to fetch torrent files:', err);
   }
 }
 
-// Preload file info for all completed torrents that don't have files or links yet
-// Preload file info ONLY for torrents that are currently visible on the screen
 async function preloadTorrentFiles() {
-  // Pega os IDs apenas dos itens que a interface montou na tela agora
   const visibleIds = new Set(currentFiltered.slice(0, visibleCount).map(d => String(d.id)));
-
-  const needsInfo = allDownloads.filter(
-    dl => visibleIds.has(String(dl.id)) && // A mágica está aqui!
-          dl._type === 'torrent' && 
-          isCompleted(dl) && 
-          ((dl.files || []).length === 0 || (dl.links || []).length === 0)
-  );
+  const needsInfo = allDownloads.filter(dl => visibleIds.has(String(dl.id)) && dl._type === 'torrent' && isCompleted(dl) && ((dl.files || []).length === 0 || (dl.links || []).length === 0));
   
   if (needsInfo.length === 0) return;
-
   let changed = false;
 
   for (const dl of needsInfo) {
@@ -508,11 +458,7 @@ async function preloadTorrentFiles() {
       }
       await new Promise(resolve => setTimeout(resolve, 250));
     } catch (err) {
-      console.warn(`Failed to preload info for ${dl.id}:`, err);
-      if (err.message && err.message.includes('429')) {
-        console.warn('Real-Debrid rate limit hit. Pausing background preload.');
-        break; 
-      }
+      if (err.message && err.message.includes('429')) break;
     }
   }
 
@@ -523,28 +469,24 @@ async function preloadTorrentFiles() {
 }
 
 async function deleteDownload(type, id) {
-  // 1. Encontra o elemento na interface e aplica um estado visual de "carregando"
   const itemElement = dlElementMap.get(String(id)) || document.querySelector(`.dl-delete-btn[data-id="${id}"]`)?.closest('.dl-item');
   if (itemElement) {
-    itemElement.style.opacity = '0.5'; // Deixa meio transparente
-    itemElement.style.pointerEvents = 'none'; // Previne que o usuário clique duas vezes
+    itemElement.style.opacity = '0.5';
+    itemElement.style.pointerEvents = 'none';
   }
 
-  // 2. Faz a requisição para a API primeiro
   try {
     if (type === 'torrent') {
       toast('Deleting...', 'success');
       await apiDelete(`/torrents/delete/${id}`);
     } else if (type === 'web') {
-      // Web downloads são locais, apenas removemos do storage
-      const { rd_local_downloads } = await chrome.storage.local.get('rd_local_downloads');
+      const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
       if (rd_local_downloads) {
         const updated = rd_local_downloads.filter(d => String(d.id) !== String(id));
-        await chrome.storage.local.set({ rd_local_downloads: updated });
+        await browser.storage.local.set({ rd_local_downloads: updated });
       }
     }
 
-    // 3. SUCESSO! A API confirmou. Agora sim animamos a saída e removemos do DOM
     if (itemElement) {
       itemElement.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
       itemElement.style.opacity = '0';
@@ -553,25 +495,16 @@ async function deleteDownload(type, id) {
     }
     dlElementMap.delete(String(id));
     
-    // 4. Atualiza os dados locais e o cache
     allDownloads = allDownloads.filter(dl => String(dl.id) !== String(id));
     cacheData(allDownloads);
 
-    // Verifica se a lista ficou vazia
-    if (allDownloads.length === 0) {
-      showState('empty');
-    }
-
+    if (allDownloads.length === 0) showState('empty');
     toast('Removed', 'success');
-
   } catch (err) {
-    // ERRO: A API falhou. Nós revertemos a interface para o estado normal.
-    console.error('Delete failed:', err);
     toast('Delete failed', 'error');
-    
     if (itemElement) {
-      itemElement.style.opacity = '1'; // Tira a transparência
-      itemElement.style.pointerEvents = 'auto'; // Devolve o clique
+      itemElement.style.opacity = '1';
+      itemElement.style.pointerEvents = 'auto';
     }
   }
 }
@@ -582,25 +515,19 @@ async function deleteAllVisible() {
     case 'downloading': targets = targets.filter(d => !isCompleted(d)); break;
     case 'completed':   targets = targets.filter(d => isCompleted(d)); break;
     case 'search':
-      targets = searchQuery
-        ? targets.filter(d => (d.name || '').toLowerCase().includes(searchQuery))
-        : targets;
+      targets = searchQuery ? targets.filter(d => (d.name || '').toLowerCase().includes(searchQuery)) : targets;
       targets = filterByAge(targets, ageFilterDays);
       break;
   }
-  // Apply type overlay
-  if (currentTypeFilter) {
-    targets = targets.filter(d => d._type === currentTypeFilter);
-  }
-
+  if (currentTypeFilter) targets = targets.filter(d => d._type === currentTypeFilter);
   if (targets.length === 0) return;
 
-  // Optimistic: animate all visible items out
-  document.querySelectorAll('.dl-item').forEach(el => {
-    el.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
-    el.style.opacity = '0';
-    el.style.transform = 'translateX(-10px)';
+  document.querySelectorAll('.dl-item').forEach(e => {
+    e.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+    e.style.opacity = '0';
+    e.style.transform = 'translateX(-10px)';
   });
+  
   setTimeout(() => {
     const ids = new Set(targets.map(d => String(d.id)));
     allDownloads = allDownloads.filter(d => !ids.has(String(d.id)));
@@ -610,24 +537,20 @@ async function deleteAllVisible() {
 
   toast('Deleting...', 'success');
 
-  let failed = 0;
-  // Separate torrents (API delete) from web items (local delete)
   const webTargets = targets.filter(dl => dl._type === 'web');
   const torrentTargets = targets.filter(dl => dl._type === 'torrent');
 
-  // Remove local web downloads
   if (webTargets.length > 0) {
     const webIds = new Set(webTargets.map(d => String(d.id)));
-    const { rd_local_downloads } = await chrome.storage.local.get('rd_local_downloads');
+    const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
     if (rd_local_downloads) {
       const updated = rd_local_downloads.filter(d => !webIds.has(String(d.id)));
-      await chrome.storage.local.set({ rd_local_downloads: updated });
+      await browser.storage.local.set({ rd_local_downloads: updated });
     }
   }
 
-  // Delegate torrent deletions to background worker (survives popup close)
   if (torrentTargets.length > 0) {
-    chrome.runtime.sendMessage({
+    browser.runtime.sendMessage({
       action: 'delete-torrents',
       ids: torrentTargets.map(dl => dl.id),
     });
@@ -653,11 +576,8 @@ async function downloadFile(type, id) {
 
       if (links.length > 0) {
         const unrestricted = await apiPost('/unrestrict/link', { link: links[0] }, false, TIMEOUT_DOWNLOAD_MS);
-        if (unrestricted?.download) {
-          triggerDownload(unrestricted.download);
-        } else {
-          toast('Failed to get download link', 'error');
-        }
+        if (unrestricted?.download) triggerDownload(unrestricted.download);
+        else toast('Failed to get download link', 'error');
       } else {
         toast('No download links available', 'error');
       }
@@ -685,13 +605,9 @@ function triggerDownload(url) {
   document.body.removeChild(a);
 }
 
-// ---- API Helpers ----
-
-// Timeout durations
-const TIMEOUT_DEFAULT_MS  = 10_000; // list fetches, user info, completion checks
-const TIMEOUT_VALIDATE_MS = 10_000; // API key validation
-const TIMEOUT_DOWNLOAD_MS = 10_000; // download link requests
-// No timeout for add-download operations — Real-Debrid can take 30s+
+const TIMEOUT_DEFAULT_MS  = 10_000;
+const TIMEOUT_VALIDATE_MS = 10_000;
+const TIMEOUT_DOWNLOAD_MS = 10_000;
 
 function fetchWithTimeout(url, options = {}, timeoutMs) {
   const controller = new AbortController();
@@ -701,9 +617,7 @@ function fetchWithTimeout(url, options = {}, timeoutMs) {
 }
 
 async function apiGet(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  }, timeoutMs);
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, { headers: { Authorization: `Bearer ${apiKey}` } }, timeoutMs);
   if (!res.ok) {
     if (res.status === 404) return null;
     throw new Error(`API error (${res.status})`);
@@ -718,14 +632,12 @@ async function apiPost(path, body, isForm = false, timeoutMs = null) {
   const headers = { Authorization: `Bearer ${apiKey}` };
   let fetchBody;
 
-  if (isForm) {
-    fetchBody = body; // FormData
-  } else {
+  if (isForm) fetchBody = body;
+  else {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
     fetchBody = new URLSearchParams(body).toString();
   }
 
-  // No timeout for add-download operations (timeoutMs === null)
   const fetchFn = timeoutMs
     ? fetchWithTimeout(`${API_BASE}${path}`, { method: 'POST', headers, body: fetchBody }, timeoutMs)
     : fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: fetchBody });
@@ -737,23 +649,14 @@ async function apiPost(path, body, isForm = false, timeoutMs = null) {
 }
 
 async function apiDelete(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${apiKey}` },
-  }, timeoutMs);
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, { method: 'DELETE', headers: { Authorization: `Bearer ${apiKey}` } }, timeoutMs);
   if (!res.ok && res.status !== 204) throw new Error(`API error (${res.status})`);
   return null;
 }
 
-// ---- Fetch all downloads ----
-// ---- Fetch all downloads ----
-// ---- Fetch all downloads ----
 async function fetchAll(isBackgroundSync = false) {
   if (!apiKey) return showState('no-api');
-
-  if (allDownloads.length === 0) {
-    showState('loading');
-  }
+  if (allDownloads.length === 0) showState('loading');
 
   try {
     let torrentsRes = [];
@@ -761,18 +664,12 @@ async function fetchAll(isBackgroundSync = false) {
       let page = 1;
       const limit = 100;
       let hasMore = true;
-      
       while (hasMore) {
         const res = await apiGet(`/torrents?limit=${limit}&page=${page}`);
-        
         if (Array.isArray(res) && res.length > 0) {
           torrentsRes.push(...res);
-          // SEGUNDO SEGREDO: Se for sync de background, paramos na página 1!
-          if (res.length < limit || isBackgroundSync) {
-            hasMore = false;
-          } else {
-            page++;
-          }
+          if (res.length < limit || isBackgroundSync) hasMore = false;
+          else page++;
         } else {
           hasMore = false; 
         }
@@ -782,14 +679,13 @@ async function fetchAll(isBackgroundSync = false) {
     }
 
     if (isBackgroundSync && allDownloads.length > 0) {
-      // MERGE MODE: Atualiza os status dos itens existentes sem apagar o histórico antigo
       const freshData = new Map();
       torrentsRes.forEach(t => freshData.set(String(t.id), normalizeTorrent(t)));
 
       allDownloads = allDownloads.map(dl => {
         if (freshData.has(String(dl.id))) {
           const updated = freshData.get(String(dl.id));
-          updated.files = dl.files; // Preserva arquivos que já tínhamos cacheado
+          updated.files = dl.files;
           updated.links = dl.links;
           freshData.delete(String(dl.id));
           return updated;
@@ -797,44 +693,36 @@ async function fetchAll(isBackgroundSync = false) {
         return dl;
       });
 
-      // Adiciona novos torrents (se houver) no topo da lista
       const newItems = Array.from(freshData.values());
       allDownloads = [...newItems, ...allDownloads];
     } else {
-      // FULL LOAD: Quando você abre a extensão, ele varre tudo
       allDownloads = [];
       if (Array.isArray(torrentsRes)) {
         torrentsRes.forEach((t) => allDownloads.push(normalizeTorrent(t)));
       }
     }
 
-    // Mescla os downloads locais da web (links desrestritos)
-    const { rd_local_downloads } = await chrome.storage.local.get('rd_local_downloads');
+    const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
     if (rd_local_downloads && rd_local_downloads.length > 0) {
       const expiryCutoff = Date.now() - 7 * 86400000;
       const valid = rd_local_downloads.filter(d => new Date(d.created_at).getTime() > expiryCutoff);
       if (valid.length !== rd_local_downloads.length) {
-        chrome.storage.local.set({ rd_local_downloads: valid });
+        browser.storage.local.set({ rd_local_downloads: valid });
       }
-      // Remove da lista atual e insere de volta para evitar itens duplicados no merge
       allDownloads = allDownloads.filter(d => d._type !== 'web');
       valid.forEach(d => allDownloads.push(d));
     }
-	
-	// Ordenação real e definitiva pela data de adição no Real-Debrid
+    
     allDownloads.sort((a, b) => {
       const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
       const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA; // Descendente: do mais novo para o mais velho
+      return dateB - dateA;
     });
 
-    // Restaura as infos de arquivos que já puxamos antes
-    const { rd_cached_downloads } = await chrome.storage.local.get('rd_cached_downloads');
+    const { rd_cached_downloads } = await browser.storage.local.get('rd_cached_downloads');
     if (rd_cached_downloads) {
       const cachedById = new Map();
-      rd_cached_downloads.forEach(d => {
-        if (d.files && d.files.length > 0) cachedById.set(String(d.id), d);
-      });
+      rd_cached_downloads.forEach(d => { if (d.files && d.files.length > 0) cachedById.set(String(d.id), d); });
       allDownloads.forEach(dl => {
         if (dl._type === 'torrent' && (dl.files || []).length === 0) {
           const cached = cachedById.get(String(dl.id));
@@ -848,29 +736,21 @@ async function fetchAll(isBackgroundSync = false) {
 
     cacheData(allDownloads);
 
-    // Se não for o background atualizando silenciosamente, resetamos o scroll infinito
-    if (!isBackgroundSync) {
-      visibleCount = 50;
-    }
+    if (!isBackgroundSync) visibleCount = 50;
     
     renderDownloads();
     preloadTorrentFiles();
-
     await updateBellFromDownloads(allDownloads);
 
-    if (allDownloads.some(d => !isCompleted(d))) {
-      startAutoRefresh();
-    } else {
-      stopAutoRefresh();
-    }
+    if (allDownloads.some(d => !isCompleted(d))) startAutoRefresh();
+    else stopAutoRefresh();
+
   } catch (err) {
-    console.error('Failed to fetch downloads', err);
     if (allDownloads.length === 0) showState('empty');
     toast('Failed to fetch downloads', 'error');
   }
 }
 
-// ---- Normalize Real-Debrid torrent to internal format ----
 function normalizeTorrent(t) {
   return {
     id: t.id,
@@ -890,53 +770,49 @@ function normalizeTorrent(t) {
   };
 }
 
-// RD timestamps are UTC but may lack a Z suffix and use space instead of T.
-// Normalize to a proper ISO 8601 string so Date parsing is consistent.
 function normalizeRdTimestamp(ts) {
   if (!ts) return null;
-  // Try parsing as-is first
   let d = new Date(ts);
   if (!isNaN(d)) return d.toISOString();
-  // Force UTC by replacing space with T and appending Z
   let s = ts.trim().replace(' ', 'T');
   if (!s.endsWith('Z')) s += 'Z';
   d = new Date(s);
   if (!isNaN(d)) return d.toISOString();
-  // Last resort: return null so formatTimeAgo skips it
   return null;
 }
 
-// Save unrestricted links as local web download entries
-async function saveLocalDownloads(unrestrictResults) {
-  const { rd_local_downloads } = await chrome.storage.local.get('rd_local_downloads');
-  const existing = rd_local_downloads || [];
+let storageQueue = Promise.resolve();
 
-  const newEntries = unrestrictResults.map(d => ({
-    id: d.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: d.filename || 'Unnamed Download',
-    size: d.filesize || 0,
-    progress: 1,
-    download_state: 'completed',
-    created_at: new Date().toISOString(),
-    _type: 'web',
-    _rd_download: d.download,
-    _rd_link: d.link,
-    _rd_host: d.host,
-    files: d.download ? [{
-      id: 0,
-      name: d.filename || 'Download',
-      size: d.filesize || 0,
-      short_name: d.filename || 'Download',
-    }] : [],
-  }));
+function saveLocalDownloads(unrestrictResults) {
+  return new Promise((resolve) => {
+    storageQueue = storageQueue.then(async () => {
+      const data = await browser.storage.local.get('rd_local_downloads');
+      const existing = data.rd_local_downloads || [];
+      const newEntries = unrestrictResults.map(d => ({
+        id: d.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: d.filename || 'Unnamed Download',
+        size: d.filesize || 0,
+        progress: 1,
+        download_state: 'completed',
+        created_at: new Date().toISOString(),
+        _type: 'web',
+        _rd_download: d.download,
+        _rd_link: d.link,
+        _rd_host: d.host,
+        files: d.download ? [{
+          id: 0,
+          name: d.filename || 'Download',
+          size: d.filesize || 0,
+          short_name: d.filename || 'Download',
+        }] : [],
+      }));
 
-  const merged = [...newEntries, ...existing].slice(0, 99);
-  await chrome.storage.local.set({ rd_local_downloads: merged });
-
-  // Track IDs so notifications fire for these downloads
-  for (const e of newEntries) {
-    await trackId(String(e.id));
-  }
+      const merged = [...newEntries, ...existing].slice(0, 99);
+      await browser.storage.local.set({ rd_local_downloads: merged });
+      for (const e of newEntries) await trackId(String(e.id));
+      resolve();
+    }).catch(console.error);
+  });
 }
 
 function mapRdStatus(status) {
@@ -957,26 +833,24 @@ function mapRdStatus(status) {
   return map[s] || s || 'unknown';
 }
 
-// ---- Fetch user info (on open and after API key save) ----
 async function fetchUserInfo() {
   if (!apiKey) return;
   try {
     const res = await apiGet('/user');
     if (res) {
       showUserBar(res);
-      chrome.storage.local.set({ rd_cached_user: res });
+      browser.storage.local.set({ rd_cached_user: res });
     }
   } catch (err) {
     console.error('Failed to fetch user info');
   }
 }
 
-// ---- Render ----
 function showState(state) {
   $('#loading').classList.toggle('hidden', state !== 'loading');
   $('#empty').classList.toggle('hidden', state !== 'empty');
   $('#no-api').classList.toggle('hidden', state !== 'no-api');
-  $('#download-list').innerHTML = '';
+  $('#download-list').replaceChildren();
   dlElementMap.clear();
 }
 
@@ -994,14 +868,11 @@ function showUserBar(data) {
 
 function calculateDaysRemaining(expiresAt) {
   if (!expiresAt) return '— days left';
-
-  // Compare calendar dates only — ignore time & timezone from API
   const [y, m, d] = expiresAt.slice(0, 10).split('-').map(Number);
   const now = new Date();
   const diffDays = Math.round(
     (Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000
   );
-
   return `${diffDays} day${diffDays === 1 ? '' : 's'} left`;
 }
 
@@ -1034,41 +905,24 @@ function updateAgeFilterUI() {
 
 function renderDownloads() {
   const list = $('#download-list');
-
-  // Pulse the Active tab label when there are active downloads
   const activeTab = $('[data-tab="downloading"]');
   activeTab.classList.toggle('has-active-downloads', allDownloads.some(d => !isCompleted(d)));
 
-// 1. Usamos a variável global que criamos
   currentFiltered = allDownloads;
 
-  // 2. Aplicamos os filtros de ABA
   switch (currentTab) {
-    case 'downloading':
-      currentFiltered = currentFiltered.filter((d) => !isCompleted(d));
-      break;
-    case 'completed':
-      currentFiltered = currentFiltered.filter((d) => isCompleted(d));
-      break;
-    // Se for 'all', não fazemos nada, mantemos todos
+    case 'downloading': currentFiltered = currentFiltered.filter(d => !isCompleted(d)); break;
+    case 'completed': currentFiltered = currentFiltered.filter(d => isCompleted(d)); break;
   }
 
-  // 3. Aplicamos o filtro de BUSCA GLOBAL e IDADE por cima da aba atual
   if (searchQuery) {
-    currentFiltered = currentFiltered.filter((d) => {
-      const name = (d.name || '').toLowerCase();
-      return name.includes(searchQuery);
-    });
+    currentFiltered = currentFiltered.filter(d => (d.name || '').toLowerCase().includes(searchQuery));
   }
   currentFiltered = filterByAge(currentFiltered, ageFilterDays);
   updateAgeFilterUI();
 
-  // Type overlay filter (independent of status)
-  if (currentTypeFilter) {
-    currentFiltered = currentFiltered.filter((d) => d._type === currentTypeFilter);
-  }
+  if (currentTypeFilter) currentFiltered = currentFiltered.filter(d => d._type === currentTypeFilter);
 
-  // Update search count badge
   const searchCountEl = $('#search-count');
   if (searchCountEl) {
     if (searchQuery || ageFilterDays) {
@@ -1082,60 +936,45 @@ function renderDownloads() {
 
   if (currentFiltered.length === 0) {
     showState('empty');
-    list.innerHTML = '';
-    dlElementMap.clear();
     return;
   }
 
-  // Clear states
   $('#loading').classList.add('hidden');
   $('#empty').classList.add('hidden');
   $('#no-api').classList.add('hidden');
 
-  // 3. A MÁGICA: Cortamos a lista para renderizar apenas a quantidade visível!
   const toRender = currentFiltered.slice(0, visibleCount);
-
-  // Pegamos os IDs dessa "fatia"
   const filteredIds = new Set(toRender.map(d => String(d.id)));
 
-  // Removemos da tela e do mapa de elementos tudo o que NÃO estiver nessa fatia
-  for (const [id, el] of dlElementMap) {
+  for (const [id, elem] of dlElementMap) {
     if (!filteredIds.has(id)) {
-      el.remove();
+      elem.remove();
       dlElementMap.delete(id);
     }
   }
 
-  // 4. Atualizamos os itens existentes ou inserimos novos na ordem correta da fatia
   toRender.forEach((dl, index) => {
     const id = String(dl.id);
     let li = dlElementMap.get(id);
 
     if (li) {
-      // Only update the dynamic parts (meta + progress) — never touch the header or
-      // expanded content, so scroll position and expanded state are fully preserved
       const newMeta = renderItemMeta(dl);
       const metaEl = li.querySelector('.dl-meta');
       if (metaEl) metaEl.replaceWith(newMeta.metaEl);
 
-      // Update progress bar width in-place so CSS transitions animate smoothly
       const progressEl = li.querySelector('.dl-progress-wrap');
       if (newMeta.progressPct != null) {
         if (progressEl) {
-          // Update existing progress bar fill width directly
           const fill = progressEl.querySelector('.dl-progress-fill');
           if (fill) fill.style.width = newMeta.progressPct + '%';
         } else {
-          // Progress wrap didn't exist yet (e.g. item just became active) — insert it
           const expandedContent = li.querySelector('.dl-expanded-content');
           if (expandedContent && newMeta.progressEl) li.insertBefore(newMeta.progressEl, expandedContent);
         }
       } else if (progressEl) {
-        // Download completed — remove progress bar
         progressEl.remove();
       }
 
-      // Inject download button into header when a download becomes completed & downloadable
       const completed = isCompleted(dl);
       const existingDlBtn = li.querySelector('.dl-download-btn');
       if (completed && canDownload(dl) && !existingDlBtn) {
@@ -1154,14 +993,12 @@ function renderDownloads() {
         }
       }
 
-      // Update expanded content if the file list has changed (e.g. download just completed)
       const currentFileCount = (dl.files || []).length;
       const knownFileCount = parseInt(li.dataset.fileCount ?? '-1', 10);
       if (currentFileCount !== knownFileCount) {
         const existingExpanded = li.querySelector('.dl-expanded-content');
         const newExpanded = renderExpandedContent(dl);
         if (existingExpanded) {
-          // Preserve the expanded/collapsed visual state
           if (li.classList.contains('expanded')) newExpanded.style.display = '';
           existingExpanded.replaceWith(newExpanded);
         } else {
@@ -1170,16 +1007,14 @@ function renderDownloads() {
         li.dataset.fileCount = String(currentFileCount);
       }
     } else {
-      // New item — create and insert at correct position
       li = document.createElement('li');
       li.className = 'dl-item';
       li.dataset.id = id;
       li.dataset.fileCount = String((dl.files || []).length);
-      li.innerHTML = renderItem(dl);
+      li.appendChild(renderItem(dl));
       dlElementMap.set(id, li);
     }
 
-    // Ensure correct DOM order
     const currentAtIndex = list.children[index];
     if (currentAtIndex !== li) {
       list.insertBefore(li, currentAtIndex || null);
@@ -1194,7 +1029,6 @@ function renderItemMeta(dl) {
   const size = dl.size ? formatBytes(dl.size) : '—';
   const completed = isCompleted(dl);
 
-  // Build meta element using createElement — no innerHTML, no escaping needed
   const metaEl = document.createElement('div');
   metaEl.className = 'dl-meta';
   metaEl.title = dl.name || 'Unnamed Download';
@@ -1214,18 +1048,13 @@ function renderItemMeta(dl) {
     const files = dl.files || [];
     const fileCount = files.length;
     const metaParts = [size];
-
-    // Extract extension of the largest file
     if (fileCount > 0) {
       const largest = files.reduce((a, b) => (b.size || 0) > (a.size || 0) ? b : a, files[0]);
       const name = largest.short_name || largest.name || '';
       const dotIdx = name.lastIndexOf('.');
-      if (dotIdx > 0) {
-        metaParts.push(name.slice(dotIdx + 1).toUpperCase());
-      }
+      if (dotIdx > 0) metaParts.push(name.slice(dotIdx + 1).toUpperCase());
       metaParts.push(`${fileCount} file${fileCount !== 1 ? 's' : ''}`);
     }
-
     const addedTime = dl.created_at ? formatTimeAgo(dl.created_at) : null;
     if (addedTime) metaParts.push(`added ${addedTime}`);
     infoSpan.textContent = metaParts.join(' • ');
@@ -1238,7 +1067,6 @@ function renderItemMeta(dl) {
 
   metaEl.appendChild(infoSpan);
 
-  // Build progress element
   let progressEl = null;
   if (!completed) {
     progressEl = document.createElement('div');
@@ -1252,11 +1080,7 @@ function renderItemMeta(dl) {
     progressEl.appendChild(bar);
   }
 
-  return {
-    metaEl,
-    progressEl: progressEl || null,
-    progressPct: completed ? null : progress,
-  };
+  return { metaEl, progressEl: progressEl || null, progressPct: completed ? null : progress };
 }
 
 function renderExpandedContent(dl) {
@@ -1265,26 +1089,13 @@ function renderExpandedContent(dl) {
   const files = dl.files || [];
   const links = dl.links || [];
 
-  function makeDownloadBtn(dataType, dataId) {
-    const btn = document.createElement('button');
-    btn.className = 'dl-file-download';
-    btn.dataset.type = dataType;
-    btn.dataset.id = String(dataId);
-    btn.dataset.fileId = '0'; // always first link
-    btn.title = 'Download';
-    btn.appendChild(makeDownloadSvg());
-    return btn;
-  }
-
   const expandedContent = document.createElement('div');
   expandedContent.className = 'dl-expanded-content';
 
   if (type === 'torrent' && isCompleted(dl) && links.length > 0) {
-    // Read-only file info rows (download is handled by header button)
     if (files.length > 0) {
       const ul = document.createElement('ul');
       ul.className = 'dl-files-list';
-
       files.forEach((f, idx) => {
         const li = document.createElement('li');
         li.className = 'dl-file-item dl-file-info';
@@ -1302,7 +1113,6 @@ function renderExpandedContent(dl) {
         li.appendChild(fsize);
         ul.appendChild(li);
       });
-
       expandedContent.appendChild(ul);
     } else {
       const noFiles = document.createElement('div');
@@ -1311,7 +1121,6 @@ function renderExpandedContent(dl) {
       expandedContent.appendChild(noFiles);
     }
   } else if (type === 'web' && dl._rd_download) {
-    // Web download info (download is handled by header button)
     const ul = document.createElement('ul');
     ul.className = 'dl-files-list';
     const li = document.createElement('li');
@@ -1343,11 +1152,7 @@ function renderItem(dl) {
   const name = dl.name || 'Unnamed Download';
   const type = dl._type;
   const completed = isCompleted(dl);
-  const size = dl.size ? formatBytes(dl.size) : '—';
-  const files = dl.files || [];
-  const deleteType = type;
 
-  // ---- Header ----
   const header = document.createElement('div');
   header.className = 'dl-item-header';
   header.title = name;
@@ -1362,7 +1167,6 @@ function renderItem(dl) {
   nameSpan.textContent = name;
   header.appendChild(nameSpan);
 
-  // Download button — only shown for completed, downloadable items
   if (completed && canDownload(dl)) {
     const dlBtn = document.createElement('button');
     dlBtn.className = 'dl-download-btn';
@@ -1377,7 +1181,7 @@ function renderItem(dl) {
 
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'dl-delete-btn';
-  deleteBtn.dataset.type = deleteType;
+  deleteBtn.dataset.type = type;
   deleteBtn.dataset.id = String(dl.id);
   deleteBtn.title = 'Delete';
   const deleteBtnIcon = makeTrashSvg();
@@ -1385,39 +1189,28 @@ function renderItem(dl) {
   deleteBtn.appendChild(deleteBtnIcon);
   header.appendChild(deleteBtn);
 
-  // ---- Meta + progress (reuse renderItemMeta) ----
   const { metaEl, progressEl } = renderItemMeta(dl);
-
-  // ---- Expanded file list ----
   const expandedContent = renderExpandedContent(dl);
 
-  // ---- Assemble into a fragment ----
   const frag = document.createDocumentFragment();
   frag.appendChild(header);
   frag.appendChild(metaEl);
   if (progressEl) frag.appendChild(progressEl);
   frag.appendChild(expandedContent);
 
-  // Serialise to HTML string — renderDownloads sets li.innerHTML once on creation
-  const wrapper = document.createElement('div');
-  wrapper.appendChild(frag);
-  return wrapper.innerHTML;
+  return frag;
 }
 
 function isCompleted(dl) {
   const s = (dl.download_state || '').toLowerCase();
   if (s === 'processing' || s === 'waiting_selection' || s.includes('queue')) return false;
-  return s === 'completed'
-    || (dl.progress != null && dl.progress >= 1);
+  return s === 'completed' || (dl.progress != null && dl.progress >= 1);
 }
 
-// isReady means the file is actually available for download
 function isReady(dl) {
-  const s = (dl.download_state || '').toLowerCase();
-  return s === 'completed';
+  return (dl.download_state || '').toLowerCase() === 'completed';
 }
 
-// canDownload — true when we have enough info to trigger a download
 function canDownload(dl) {
   if (dl._type === 'web' && dl._rd_download) return true;
   if (dl._type === 'torrent' && (dl.links || []).length > 0) return true;
@@ -1441,17 +1234,6 @@ function getStatusClass(status) {
 }
 
 // ---- Modals ----
-function openModal(title, bodyHtml) {
-  // Remove any leftover dynamic buttons from previous modal opens
-  document.querySelectorAll('.notifications-mark-all').forEach(el => el.remove());
-  $('#modal-title').textContent = title;
-  $('#modal-body').innerHTML = bodyHtml;
-  $('#modal-overlay').classList.remove('hidden');
-  initFixedTooltips();
-}
-
-// Variant that accepts a pre-built DOM node instead of an HTML string,
-// avoiding any innerHTML serialise/parse round-trip for user-controlled content.
 function openModalWithNode(title, bodyNode) {
   document.querySelectorAll('.notifications-mark-all').forEach(el => el.remove());
   $('#modal-title').textContent = title;
@@ -1460,28 +1242,22 @@ function openModalWithNode(title, bodyNode) {
   initFixedTooltips();
 }
 
-// ---- Fixed-position tooltips (immune to overflow clipping) ----
 function initFixedTooltips() {
   document.querySelectorAll('.info-icon').forEach(icon => {
     const tip = icon.querySelector('.info-tooltip');
     if (!tip) return;
-
     icon.addEventListener('mouseenter', () => {
       const modal = document.querySelector('#modal');
       const iconRect = icon.getBoundingClientRect();
       const modalRect = modal ? modal.getBoundingClientRect() : document.body.getBoundingClientRect();
-
-      // Make visible off-screen first so we can measure width
       tip.style.position = 'fixed';
       tip.style.visibility = 'hidden';
       tip.classList.add('visible');
       const tipWidth = tip.offsetWidth;
       tip.style.visibility = '';
-
       tip.style.left = `${modalRect.left + (modalRect.width - tipWidth) / 2}px`;
       tip.style.top = `${iconRect.bottom + 6}px`;
     });
-
     icon.addEventListener('mouseleave', () => {
       tip.classList.remove('visible');
       tip.style.position = '';
@@ -1495,142 +1271,126 @@ function closeModal() {
   $('#modal-overlay').classList.add('hidden');
 }
 
-// API Key Modal
 function showApiKeyModal() {
-  chrome.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_accent_color', 'rd_cached_user', 'rd_max_height'], (data) => {
-    const contextMenuEnabled = data.rd_context_menu !== false; // default on
-    const notificationsEnabled = data.rd_notifications_enabled !== false; // default on
-    const hoverLiftEnabled = data.rd_hover_lift !== false; // default on
+  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_accent_color', 'rd_cached_user', 'rd_max_height']).then((data) => {
+    const contextMenuEnabled = data.rd_context_menu !== false;
+    const notificationsEnabled = data.rd_notifications_enabled !== false;
+    const hoverLiftEnabled = data.rd_hover_lift !== false;
     const customAccent = data.rd_accent_color || '';
     const cachedUser = data.rd_cached_user;
     const userPoints = cachedUser?.points != null ? cachedUser.points.toLocaleString() : '—';
     const username = cachedUser?.username || cachedUser?.email || '—';
     const currentMaxHeight = data.rd_max_height || 400;
+    const defaultColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#52c47e' : '#1a9c4a';
 
-    openModal('Settings', `
-      <div class="form-group">
-        <div class="toggle-row">
-          <div>
-            <div class="form-label" style="margin-bottom:2px;">Right-click context menu</div>
-            <div class="form-hint">Show "Send to Real-Debrid Lite" when right-clicking links or selected text (e.g. plain text links).</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-context-menu" ${contextMenuEnabled ? 'checked' : ''}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="toggle-row">
-          <div>
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
-              <div class="form-label" style="margin-bottom:0;">Download notifications</div>
-              <span class="info-icon">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                <span class="info-tooltip">When turned off, Real-Debrid Lite won't send any background requests — it stays completely idle unless you open or send a link to it.</span>
-              </span>
-            </div>
-            <div class="form-hint">Notify me when downloads are ready (incl. cached files). Notifications are updated every 60s in the background.</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-notifications" ${notificationsEnabled ? 'checked' : ''}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="toggle-row">
-          <div>
-            <div class="form-label" style="margin-bottom:2px;">Hover lift effect</div>
-            <div class="form-hint">Adds a subtle lift and shadow to download tiles and action buttons on hover. Disable for a flatter, minimal look.</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="toggle-hover-lift" ${hoverLiftEnabled ? 'checked' : ''}>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-      <div class="form-group">
-        <div class="settings-split-row">
-          <div class="settings-split-col">
-            <label class="form-label" style="margin-bottom:6px;">
-              <span style="display:inline-flex;align-items:center;gap:5px;">Max height <span class="slider-value-inline" id="max-height-value">${currentMaxHeight}px</span>
-                <span class="info-icon">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                  <span class="info-tooltip">Scales window height as your list grows.</span>
-                </span>
-              </span>
-            </label>
-            <input type="range" id="input-max-height" class="settings-slider" min="400" max="600" step="10" value="${currentMaxHeight}">
-          </div>
-          <div class="settings-split-col settings-split-right">
-            <label class="form-label" style="margin-bottom:6px;">Accent color</label>
-            <div class="accent-picker-row">
-              <button id="btn-reset-accent" class="accent-reset-btn">Reset</button>
-              <input type="color" id="input-accent-color" class="accent-color-input small" value="${customAccent || (document.documentElement.getAttribute('data-theme') === 'dark' ? '#52c47e' : '#1a9c4a')}">
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="settings-account-section">
-        <div class="form-group" style="margin-bottom:10px;">
-          <label class="form-label">API Token <span class="form-label-normal">(from <a href="https://real-debrid.com/apitoken" target="_blank" class="form-label-link">Real-Debrid</a>)</span></label>
-          <div class="api-key-row">
-            <input type="password" class="form-input" id="input-api-key" value="${escapeHtml(apiKey)}" placeholder="Paste your Real-Debrid API token" spellcheck="false">
-            <button class="api-key-save" id="save-api-key" disabled title="Edit token to save">Save</button>
-          </div>
-        </div>
-        <div class="settings-account-footer">
-          <div class="settings-account-left">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <span class="settings-account-name">${escapeHtml(username)}</span>
-          </div>
-          <span class="settings-account-points">${escapeHtml(userPoints)} Fidelity Points</span>
-        </div>
-      </div>
-    `);
+    const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
 
-    $('#toggle-context-menu').addEventListener('change', (e) => {
-      chrome.storage.local.set({ rd_context_menu: e.target.checked });
-    });
+    const body = el('div', {},
+      el('div', {className: 'form-group'},
+        el('div', {className: 'toggle-row'},
+          el('div', {},
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Right-click context menu'),
+            el('div', {className: 'form-hint'}, 'Show "Send to Real-Debrid Lite" when right-clicking links.')
+          ),
+          el('label', {className: 'toggle-switch'},
+            el('input', {type: 'checkbox', id: 'toggle-context-menu', checked: contextMenuEnabled ? 'checked' : null}),
+            el('span', {className: 'toggle-slider'})
+          )
+        )
+      ),
+      el('div', {className: 'form-group'},
+        el('div', {className: 'toggle-row'},
+          el('div', {},
+            el('div', {style: 'display:flex;align-items:center;gap:5px;margin-bottom:2px;'},
+              el('div', {className: 'form-label', style: 'margin-bottom:0;'}, 'Download notifications'),
+              el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Won\'t send background requests if off.'))
+            ),
+            el('div', {className: 'form-hint'}, 'Notify me when downloads are ready.')
+          ),
+          el('label', {className: 'toggle-switch'},
+            el('input', {type: 'checkbox', id: 'toggle-notifications', checked: notificationsEnabled ? 'checked' : null}),
+            el('span', {className: 'toggle-slider'})
+          )
+        )
+      ),
+      el('div', {className: 'form-group'},
+        el('div', {className: 'toggle-row'},
+          el('div', {},
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Hover lift effect'),
+            el('div', {className: 'form-hint'}, 'Adds a subtle lift and shadow.')
+          ),
+          el('label', {className: 'toggle-switch'},
+            el('input', {type: 'checkbox', id: 'toggle-hover-lift', checked: hoverLiftEnabled ? 'checked' : null}),
+            el('span', {className: 'toggle-slider'})
+          )
+        )
+      ),
+      el('div', {className: 'form-group'},
+        el('div', {className: 'settings-split-row'},
+          el('div', {className: 'settings-split-col'},
+            el('label', {className: 'form-label', style: 'margin-bottom:6px;'},
+              el('span', {style: 'display:inline-flex;align-items:center;gap:5px;'}, 'Max height ',
+                el('span', {className: 'slider-value-inline', id: 'max-height-value'}, currentMaxHeight + 'px'),
+                el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Scales window height.'))
+              )
+            ),
+            el('input', {type: 'range', id: 'input-max-height', className: 'settings-slider', min: '400', max: '600', step: '10', value: String(currentMaxHeight)})
+          ),
+          el('div', {className: 'settings-split-col settings-split-right'},
+            el('label', {className: 'form-label', style: 'margin-bottom:6px;'}, 'Accent color'),
+            el('div', {className: 'accent-picker-row'},
+              el('button', {id: 'btn-reset-accent', className: 'accent-reset-btn'}, 'Reset'),
+              el('input', {type: 'color', id: 'input-accent-color', className: 'accent-color-input small', value: customAccent || defaultColor})
+            )
+          )
+        )
+      ),
+      el('div', {className: 'settings-account-section'},
+        el('div', {className: 'form-group', style: 'margin-bottom:10px;'},
+          el('label', {className: 'form-label'}, 'API Token ', el('span', {className: 'form-label-normal'}, '(from ', el('a', {href: 'https://real-debrid.com/apitoken', target: '_blank', className: 'form-label-link'}, 'Real-Debrid'), ')')),
+          el('div', {className: 'api-key-row'},
+            el('input', {type: 'password', className: 'form-input', id: 'input-api-key', value: apiKey, placeholder: 'Paste your Real-Debrid API token', spellcheck: 'false'}),
+            el('button', {className: 'api-key-save', id: 'save-api-key', disabled: 'disabled', title: 'Edit token to save'}, 'Save')
+          )
+        ),
+        el('div', {className: 'settings-account-footer'},
+          el('div', {className: 'settings-account-left'},
+            makeSvg([['path',{d:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}],['circle',{cx:'12',cy:'7',r:'4'}]]),
+            el('span', {className: 'settings-account-name'}, username)
+          ),
+          el('span', {className: 'settings-account-points'}, userPoints + ' Fidelity Points')
+        )
+      )
+    );
 
+    openModalWithNode('Settings', body);
+
+    $('#toggle-context-menu').addEventListener('change', (e) => browser.storage.local.set({ rd_context_menu: e.target.checked }));
     $('#toggle-notifications').addEventListener('change', (e) => {
-      chrome.storage.local.set({ rd_notifications_enabled: e.target.checked });
+      browser.storage.local.set({ rd_notifications_enabled: e.target.checked });
       if (!e.target.checked) {
         notifications = [];
         updateNotificationBadge();
       }
     });
-
     $('#toggle-hover-lift').addEventListener('change', (e) => {
-      chrome.storage.local.set({ rd_hover_lift: e.target.checked });
+      browser.storage.local.set({ rd_hover_lift: e.target.checked });
       document.documentElement.setAttribute('data-hover-lift', e.target.checked ? 'on' : 'off');
     });
 
-    // Max height slider — live preview on drag, save on release
     const maxHeightSlider = $('#input-max-height');
     const maxHeightLabel = $('#max-height-value');
     maxHeightSlider.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
-      maxHeightLabel.textContent = val + 'px';
-      applyMaxHeight(val);
+      maxHeightLabel.textContent = e.target.value + 'px';
+      applyMaxHeight(parseInt(e.target.value));
     });
-    maxHeightSlider.addEventListener('change', (e) => {
-      chrome.storage.local.set({ rd_max_height: parseInt(e.target.value) });
-    });
+    maxHeightSlider.addEventListener('change', (e) => browser.storage.local.set({ rd_max_height: parseInt(e.target.value) }));
 
-    $('#input-accent-color').addEventListener('input', (e) => {
-      applyAccentColor(e.target.value);
-    });
-
-    $('#input-accent-color').addEventListener('change', (e) => {
-      chrome.storage.local.set({ rd_accent_color: e.target.value });
-    });
-
+    $('#input-accent-color').addEventListener('input', (e) => applyAccentColor(e.target.value));
+    $('#input-accent-color').addEventListener('change', (e) => browser.storage.local.set({ rd_accent_color: e.target.value }));
     $('#btn-reset-accent').addEventListener('click', () => {
-      chrome.storage.local.remove('rd_accent_color');
+      browser.storage.local.remove('rd_accent_color');
       clearAccentColor();
-      const defaultColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#52c47e' : '#1a9c4a';
       $('#input-accent-color').value = defaultColor;
     });
 
@@ -1653,21 +1413,17 @@ function showApiKeyModal() {
       saveBtn.textContent = '...';
 
       try {
-        const res = await fetchWithTimeout(`${API_BASE}/user`, {
-          headers: { Authorization: `Bearer ${key}` },
-        }, TIMEOUT_VALIDATE_MS);
+        const res = await fetchWithTimeout(`${API_BASE}/user`, { headers: { Authorization: `Bearer ${key}` } }, TIMEOUT_VALIDATE_MS);
         if (!res.ok) throw new Error(`API error (${res.status})`);
         const data = await res.json();
-
         if (!data?.id) throw new Error('Invalid response');
 
         saveApiKey(key);
         saveBtn.textContent = '✓';
         toast('API token saved!', 'success');
         showUserBar(data);
-        chrome.storage.local.set({ rd_cached_user: data });
+        browser.storage.local.set({ rd_cached_user: data });
 
-        // Update account footer in the modal live
         const nameEl = document.querySelector('.settings-account-name');
         const pointsEl = document.querySelector('.settings-account-points');
         if (nameEl) nameEl.textContent = data.username || data.email || '—';
@@ -1676,8 +1432,7 @@ function showApiKeyModal() {
         fetchAll();
         fetchUserInfo();
       } catch (err) {
-        const msg = err.name === 'AbortError' ? 'Validation timed out — try again' : 'Invalid API token';
-        toast(msg, 'error');
+        toast(err.name === 'AbortError' ? 'Validation timed out' : 'Invalid API token', 'error');
         saveBtn.disabled = false;
         saveBtn.classList.remove('loading');
         saveBtn.textContent = 'Save';
@@ -1688,7 +1443,6 @@ function showApiKeyModal() {
       if (e.key === 'Enter' && !saveBtn.disabled) saveBtn.click();
     });
 
-    // If no API key is set, scroll to and focus the token field
     if (!apiKey) {
       setTimeout(() => {
         apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1698,36 +1452,32 @@ function showApiKeyModal() {
   });
 }
 
-// Torrent Modal (magnet or file)
 function showTorrentModal() {
   if (!apiKey) return showApiKeyModal();
 
-  openModal('Add Torrent', `
-    <div class="form-group">
-      <div class="form-label-row">
-        <div class="form-label-left">
-          <label class="form-label">Magnet Link</label>
-          <span class="info-icon">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span class="info-tooltip">Paste a magnet link or upload a .torrent file. Right-click any magnet or .torrent link to add instantly.</span>
-          </span>
-        </div>
-      </div>
-      <textarea class="form-input" id="input-magnet" placeholder="magnet:?xt=urn:btih:..." rows="5" spellcheck="false"></textarea>
-    </div>
-    <div class="form-divider">
-      <span>or</span>
-    </div>
-    <div class="form-group">
-      <input type="file" id="input-torrent-file" accept=".torrent" style="display:none">
-      <button class="form-file-btn" id="btn-select-torrent">
-        <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Select .torrent File
-      </button>
-      <div class="form-file-name" id="selected-file-name"></div>
-    </div>
-    <button class="form-submit" id="submit-torrent">Add Torrent <span class="btn-spinner"></span></button>
-  `);
+  const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
+  const btnSvg = makeSvg([['path',{d:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}],['polyline',{points:'14 2 14 8 20 8'}]]);
+
+  const body = el('div', {},
+    el('div', {className: 'form-group'},
+      el('div', {className: 'form-label-row'},
+        el('div', {className: 'form-label-left'},
+          el('label', {className: 'form-label'}, 'Magnet Link'),
+          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Paste a magnet link or upload a .torrent file.'))
+        )
+      ),
+      el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'})
+    ),
+    el('div', {className: 'form-divider'}, el('span', {}, 'or')),
+    el('div', {className: 'form-group'},
+      el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent', style: 'display:none'}),
+      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), 'Select .torrent File'),
+      el('div', {className: 'form-file-name', id: 'selected-file-name'})
+    ),
+    el('button', {className: 'form-submit', id: 'submit-torrent'}, 'Add Torrent ', el('span', {className: 'btn-spinner'}))
+  );
+
+  openModalWithNode('Add Torrent', body);
 
   const magnetInput = $('#input-magnet');
   const fileInput = $('#input-torrent-file');
@@ -1759,18 +1509,15 @@ function showTorrentModal() {
     const magnet = magnetInput.value.trim();
     const file = fileInput.files[0];
 
-    if (!magnet && !file) {
-      return toast('Enter a magnet link or select a file', 'error');
-    }
+    if (!magnet && !file) return toast('Enter a magnet link or select a file', 'error');
 
     submitBtn.disabled = true;
     submitBtn.classList.add('loading');
-    submitBtn.innerHTML = 'Adding...<span class="btn-spinner"></span>';
+    submitBtn.replaceChildren('Adding...', el('span', {className: 'btn-spinner'}));
 
     try {
       let torrentId = null;
       if (file) {
-        // RD uses PUT with raw binary body for .torrent files
         const res = await fetch(`${API_BASE}/torrents/addTorrent`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${apiKey}` },
@@ -1779,9 +1526,7 @@ function showTorrentModal() {
         if (!res.ok) throw new Error(`API error (${res.status})`);
         const data = await res.json();
         torrentId = data.id;
-        if (torrentId) {
-          await apiPost(`/torrents/selectFiles/${torrentId}`, { files: 'all' });
-        }
+        if (torrentId) await apiPost(`/torrents/selectFiles/${torrentId}`, { files: 'all' });
       } else {
         if (!magnet.startsWith('magnet:')) {
           toast('Invalid magnet link', 'error');
@@ -1791,130 +1536,107 @@ function showTorrentModal() {
         }
         const data = await apiPost('/torrents/addMagnet', { magnet: magnet });
         torrentId = data?.id;
-        if (torrentId) {
-          await apiPost(`/torrents/selectFiles/${torrentId}`, { files: 'all' });
-        }
+        if (torrentId) await apiPost(`/torrents/selectFiles/${torrentId}`, { files: 'all' });
       }
 
       if (torrentId) await trackId(String(torrentId));
       toast('Torrent added!', 'success');
       closeModal();
       fetchAll();
-      chrome.runtime.sendMessage('rd-check-now');
+      browser.runtime.sendMessage('rd-check-now');
     } catch (err) {
-      console.error('Failed to add torrent');
       toast('Failed to add torrent', 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
-      submitBtn.innerHTML = 'Add Torrent<span class="btn-spinner"></span>';
+      submitBtn.replaceChildren('Add Torrent', el('span', {className: 'btn-spinner'}));
     }
   });
 
   setTimeout(() => magnetInput.focus(), 100);
 }
 
-// Unrestrict Link Modal
 function showWebLinkModal() {
   if (!apiKey) return showApiKeyModal();
 
-  openModal('Unrestrict Link', `
-    <div class="form-group">
-      <div class="form-label-row">
-        <div class="form-label-left">
-          <label class="form-label">URL</label>
-          <span class="info-icon">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <span class="info-tooltip">Paste hoster links to unrestrict them into direct downloads. Right-click any link or selected text to unrestrict instantly.</span>
-          </span>
-        </div>
-        <div class="form-label-icons">
-          <a href="https://real-debrid.com/compare" target="_blank" class="hosters-link" title="View supported hosters">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            Supported hosters
-          </a>
-        </div>
-      </div>
-      <textarea class="form-input" id="input-weblink" placeholder="https://1fichier.com/...&#10;https://rapidgator.net/...&#10;https://uptobox.com/..." rows="5" spellcheck="false"></textarea>
-    </div>
-    <button class="form-submit" id="submit-weblink">Unrestrict <span class="btn-spinner"></span></button>
-  `);
+  const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
+  const compareSvg = makeSvg([['path',{d:'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'}],['polyline',{points:'15 3 21 3 21 9'}],['line',{x1:'10',y1:'14',x2:'21',y2:'3'}]]);
+
+  const body = el('div', {},
+    el('div', {className: 'form-group'},
+      el('div', {className: 'form-label-row'},
+        el('div', {className: 'form-label-left'},
+          el('label', {className: 'form-label'}, 'URL'),
+          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Paste hoster links to unrestrict them.'))
+        ),
+        el('div', {className: 'form-label-icons'},
+          el('a', {href: 'https://real-debrid.com/compare', target: '_blank', className: 'hosters-link', title: 'View supported hosters'}, compareSvg.cloneNode(true), 'Supported hosters')
+        )
+      ),
+      el('textarea', {className: 'form-input', id: 'input-weblink', placeholder: 'https://1fichier.com/...\nhttps://rapidgator.net/...', rows: '5', spellcheck: 'false'})
+    ),
+    el('button', {className: 'form-submit', id: 'submit-weblink'}, 'Unrestrict ', el('span', {className: 'btn-spinner'}))
+  );
+
+  openModalWithNode('Unrestrict Link', body);
 
   const urlInput = $('#input-weblink');
   const submitBtn = $('#submit-weblink');
 
   submitBtn.addEventListener('click', async () => {
-    const urls = urlInput.value
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l.startsWith('http://') || l.startsWith('https://'));
-
-    if (urls.length === 0) {
-      return toast('Enter at least one valid URL', 'error');
-    }
+    const urls = urlInput.value.split('\n').map(l => l.trim()).filter(l => l.startsWith('http://') || l.startsWith('https://'));
+    if (urls.length === 0) return toast('Enter at least one valid URL', 'error');
 
     submitBtn.disabled = true;
     submitBtn.classList.add('loading');
-    submitBtn.innerHTML = `Unrestricting...<span class="btn-spinner"></span>`;
+    submitBtn.replaceChildren('Unrestricting...', el('span', {className: 'btn-spinner'}));
 
     try {
-      const results = await Promise.allSettled(urls.map(url => {
-        return apiPost('/unrestrict/link', { link: url });
-      }));
-
+      const results = await Promise.allSettled(urls.map(url => apiPost('/unrestrict/link', { link: url })));
       const succeeded = [];
       let failed = 0;
       results.forEach(r => {
-        if (r.status === 'fulfilled' && r.value) {
-          succeeded.push(r.value);
-        } else {
-          failed++;
-        }
+        if (r.status === 'fulfilled' && r.value) succeeded.push(r.value);
+        else failed++;
       });
 
-      // Save successful unrestrictions locally
-      if (succeeded.length > 0) {
-        await saveLocalDownloads(succeeded);
-      }
+      if (succeeded.length > 0) await saveLocalDownloads(succeeded);
 
       if (failed === 0) {
         toast(urls.length > 1 ? `${succeeded.length} links unrestricted!` : 'Link unrestricted!', 'success');
         closeModal();
         fetchAll();
       } else if (succeeded.length === 0) {
-        toast('All links failed — hosters may not be supported', 'error');
+        toast('All links failed', 'error');
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading');
-        submitBtn.innerHTML = 'Unrestrict<span class="btn-spinner"></span>';
+        submitBtn.replaceChildren('Unrestrict', el('span', {className: 'btn-spinner'}));
       } else {
         toast(`${succeeded.length} unrestricted, ${failed} failed`, 'error');
         closeModal();
         fetchAll();
       }
     } catch (err) {
-      console.error('Failed to unrestrict link');
       toast('Failed to unrestrict link', 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
-      submitBtn.innerHTML = 'Unrestrict<span class="btn-spinner"></span>';
+      submitBtn.replaceChildren('Unrestrict', el('span', {className: 'btn-spinner'}));
     }
   });
 
   setTimeout(() => urlInput.focus(), 100);
 }
 
-// ---- Toast ----
 function toast(msg, type = 'success') {
   const existing = document.querySelector('.toast');
   if (existing) existing.remove();
 
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
+  const tEl = document.createElement('div');
+  tEl.className = `toast ${type}`;
+  tEl.textContent = msg;
+  document.body.appendChild(tEl);
+  setTimeout(() => tEl.remove(), 2500);
 }
 
-// ---- Utils ----
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
@@ -1937,7 +1659,6 @@ function formatTimeAgo(dateStr) {
   const date = new Date(dateStr);
   if (isNaN(date)) return null;
   const diffDays = Math.floor(Math.abs(Date.now() - date.getTime()) / 86400000);
-
   if (diffDays === 0) return 'recently';
   if (diffDays === 1) return '1d ago';
   return `${diffDays}d ago`;
@@ -1947,13 +1668,6 @@ function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-// ---- SVG helper (avoids innerHTML for icon markup) ----
 function makeSvg(paths, { viewBox = '0 0 24 24', width = '14', height = '14' } = {}) {
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
@@ -1997,32 +1711,22 @@ function fileBaseName(str) {
   return idx >= 0 ? str.slice(idx + 1) : str;
 }
 
-// ---- Notifications ----
-// When the popup is open, fetchAll drives notification detection directly using
-// the data it already has — no extra API calls needed. The background worker
-// is the fallback when the popup is closed.
 async function updateBellFromDownloads(downloads) {
   if (!cachedNotificationsEnabled) return;
-
-  const { rd_tracked_ids } = await chrome.storage.local.get('rd_tracked_ids');
+  const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
   const trackedIds = new Set(rd_tracked_ids || []);
   if (trackedIds.size === 0) {
     await loadLocalNotifications();
     return;
   }
-
   const justCompleted = downloads.filter(dl => isReady(dl) && trackedIds.has(String(dl.id)));
   if (justCompleted.length === 0) {
     await loadLocalNotifications();
     return;
   }
-
-  // Remove completed items from tracked set
   justCompleted.forEach(dl => trackedIds.delete(String(dl.id)));
-  await chrome.storage.local.set({ rd_tracked_ids: [...trackedIds] });
-
-  // Write to local notifications so the bell updates
-  const { rd_local_notifications } = await chrome.storage.local.get('rd_local_notifications');
+  await browser.storage.local.set({ rd_tracked_ids: [...trackedIds] });
+  const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
   const existing = rd_local_notifications || [];
   const merged = [
     ...justCompleted.map(dl => ({
@@ -2035,7 +1739,7 @@ async function updateBellFromDownloads(downloads) {
     })),
     ...existing,
   ].slice(0, 99);
-  await chrome.storage.local.set({ rd_local_notifications: merged });
+  await browser.storage.local.set({ rd_local_notifications: merged });
   await loadLocalNotifications();
 }
 
@@ -2045,15 +1749,13 @@ async function loadLocalNotifications() {
     updateNotificationBadge();
     return;
   }
-  const { rd_local_notifications } = await chrome.storage.local.get('rd_local_notifications');
+  const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
   notifications = (rd_local_notifications || []).filter(n => !n.read);
   updateNotificationBadge();
 }
 
 function showNotificationsModal() {
   const hasNotifications = notifications.length > 0;
-
-  // Build modal body entirely via DOM — no innerHTML with user-controlled strings
   const bodyEl = document.createElement('div');
 
   if (hasNotifications) {
@@ -2062,29 +1764,14 @@ function showNotificationsModal() {
     listEl.id = 'notifications-list';
 
     notifications.forEach(n => {
-      const item = document.createElement('div');
-      item.className = 'notification-item unread';
+      const item = el('div', {className: 'notification-item unread'},
+        el('div', {className: 'notification-header'},
+          el('span', {className: 'notification-title'}, n.title || 'Download Available'),
+          el('span', {className: 'notification-time'}, formatTimeAgo(n.created_at))
+        ),
+        el('div', {className: 'notification-message'}, n.message || '')
+      );
       item.dataset.id = n.id;
-
-      const titleEl = document.createElement('span');
-      titleEl.className = 'notification-title';
-      titleEl.textContent = n.title || 'Download Available';
-
-      const timeEl = document.createElement('span');
-      timeEl.className = 'notification-time';
-      timeEl.textContent = formatTimeAgo(n.created_at);
-
-      const headerEl = document.createElement('div');
-      headerEl.className = 'notification-header';
-      headerEl.appendChild(titleEl);
-      headerEl.appendChild(timeEl);
-
-      const msgEl = document.createElement('div');
-      msgEl.className = 'notification-message';
-      msgEl.textContent = n.message || '';
-
-      item.appendChild(headerEl);
-      item.appendChild(msgEl);
 
       item.addEventListener('click', async () => {
         item.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
@@ -2095,26 +1782,16 @@ function showNotificationsModal() {
           item.remove();
           if (notifications.length === 0) {
             const list = $('#notifications-list');
-            if (list) {
-              const emptyEl = document.createElement('div');
-              emptyEl.className = 'notifications-empty';
-              emptyEl.textContent = 'No notifications';
-              list.replaceChildren(emptyEl);
-            }
+            if (list) list.replaceChildren(el('div', {className: 'notifications-empty'}, 'No notifications'));
             $('#btn-mark-all-read')?.remove();
           }
         }, 150);
       });
-
       listEl.appendChild(item);
     });
-
     bodyEl.appendChild(listEl);
   } else {
-    const emptyEl = document.createElement('div');
-    emptyEl.className = 'notifications-empty';
-    emptyEl.textContent = 'No notifications';
-    bodyEl.appendChild(emptyEl);
+    bodyEl.appendChild(el('div', {className: 'notifications-empty'}, 'No notifications'));
   }
 
   openModalWithNode('Notifications', bodyEl);
@@ -2140,29 +1817,27 @@ async function updateNotificationBadge() {
   if (count > 0) {
     badge.textContent = count > 99 ? '99+' : count;
     badge.classList.remove('hidden');
-    chrome.action.setBadgeText({ text: count > 99 ? '99+' : String(count) });
-    const { rd_accent_color } = await chrome.storage.local.get('rd_accent_color');
-    chrome.action.setBadgeBackgroundColor({ color: rd_accent_color || '#1a9c4a' });
+    browser.action.setBadgeText({ text: count > 99 ? '99+' : String(count) });
+    const { rd_accent_color } = await browser.storage.local.get('rd_accent_color');
+    browser.action.setBadgeBackgroundColor({ color: rd_accent_color || '#1a9c4a' });
   } else {
     badge.classList.add('hidden');
-    chrome.action.setBadgeText({ text: '' });
+    browser.action.setBadgeText({ text: '' });
   }
 }
 
 async function clearNotification(id) {
-  const { rd_local_notifications } = await chrome.storage.local.get('rd_local_notifications');
-  const updated = (rd_local_notifications || []).map(n =>
-    n.id === id ? { ...n, read: true } : n
-  );
-  await chrome.storage.local.set({ rd_local_notifications: updated });
+  const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
+  const updated = (rd_local_notifications || []).map(n => n.id === id ? { ...n, read: true } : n);
+  await browser.storage.local.set({ rd_local_notifications: updated });
   notifications = notifications.filter(n => n.id !== id);
   updateNotificationBadge();
 }
 
 async function clearAllNotifications() {
-  const { rd_local_notifications } = await chrome.storage.local.get('rd_local_notifications');
+  const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
   const updated = (rd_local_notifications || []).map(n => ({ ...n, read: true }));
-  await chrome.storage.local.set({ rd_local_notifications: updated });
+  await browser.storage.local.set({ rd_local_notifications: updated });
   notifications = [];
   updateNotificationBadge();
   toast('All notifications cleared', 'success');
