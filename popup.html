@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="pt-br" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +9,7 @@
 <body>
   <header id="header">
     <div class="header-left">
-      <span class="logo-icon" title="Open Real-Debrid Dashboard">Ⓡ</span>
+      <span class="logo-icon" title="Abrir Painel do Real-Debrid">Ⓡ</span>
       <span class="logo-text">RD <span class="logo-accent">Manager</span></span>
     </div>
     <div class="header-right">
@@ -17,14 +17,14 @@
         <span id="header-plan-name" class="header-plan-name"></span>
         <span id="header-plan-expiry" class="header-plan-expiry"></span>
       </div>
-      <button id="btn-settings" class="icon-btn" title="Settings">
+      <button id="btn-settings" class="icon-btn" title="Configurações">
         <svg class="icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
       </button>
-      <button id="btn-theme" class="icon-btn" title="Toggle theme">
+      <button id="btn-theme" class="icon-btn" title="Alternar tema">
         <svg class="icon sun-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <svg class="icon moon-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button id="btn-notifications" class="icon-btn" title="Notifications">
+      <button id="btn-notifications" class="icon-btn" title="Notificações">
         <svg class="icon" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.73 21a2 2 0 0 1-3.46 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span class="notification-badge hidden" id="notification-badge">0</span>
       </button>
@@ -34,13 +34,13 @@
   <div id="action-bar">
     <button id="btn-add-torrent" class="action-btn primary">
       <svg class="icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      Add Torrent
+      Adicionar Torrent
     </button>
     <button id="btn-add-webdl" class="action-btn secondary">
       <svg class="icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Unrestrict Link
+      Desbloquear Link
     </button>
-    <button id="btn-refresh" class="action-btn ghost" title="Refresh">
+    <button id="btn-refresh" class="action-btn ghost" title="Atualizar">
       <svg class="icon refresh-icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <svg class="icon check-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
@@ -49,47 +49,47 @@
   <div id="search-box" class="search-container">
     <div class="search-row">
       <div class="search-input-wrap">
-        <input type="text" id="search-input" class="search-input" placeholder="Search downloads..." spellcheck="false">
+        <input type="text" id="search-input" class="search-input" placeholder="Pesquisar downloads..." spellcheck="false">
         <span id="search-count" class="search-count"></span>
       </div>
       <div class="age-filter-wrap">
         <button id="btn-age-filter" class="age-filter-btn">
-          <span id="age-filter-label">Older than...</span>
+          <span id="age-filter-label">Mais antigo que...</span>
           <svg class="icon age-filter-chevron" viewBox="0 0 24 24" width="12" height="12"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <div id="age-filter-menu" class="age-filter-menu hidden">
-          <button class="age-filter-option" data-age="1">Older than 1 day</button>
-          <button class="age-filter-option" data-age="7">Older than 1 week</button>
-          <button class="age-filter-option" data-age="30">Older than 1 month</button>
-          <button class="age-filter-option age-filter-clear hidden" data-age="">Clear filter</button>
+          <button class="age-filter-option" data-age="1">Mais de 1 dia</button>
+          <button class="age-filter-option" data-age="7">Mais de 1 semana</button>
+          <button class="age-filter-option" data-age="30">Mais de 1 mês</button>
+          <button class="age-filter-option age-filter-clear hidden" data-age="">Limpar filtro</button>
         </div>
       </div>
     </div>
   </div>
 
   <nav id="tabs">
-    <button class="tab active" data-tab="all">All</button>
-    <button class="tab" data-tab="downloading">Active</button>
-    <button class="tab" data-tab="completed">Done</button>
-    <button class="tab tab-type-cycle" id="tab-type-cycle" data-tab="torrents" data-cycle-state="none">Type</button>
-    <button id="btn-delete-all" class="tab tab-delete-all" title="Hold to delete all visible results (respects filters and search)">
-      <svg class="icon" viewBox="0 0 24 24" style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg><span>Delete all</span>
+    <button class="tab active" data-tab="all">Todos</button>
+    <button class="tab" data-tab="downloading">Ativos</button>
+    <button class="tab" data-tab="completed">Concluídos</button>
+    <button class="tab tab-type-cycle" id="tab-type-cycle" data-tab="torrents" data-cycle-state="none">Tipo</button>
+    <button id="btn-delete-all" class="tab tab-delete-all" title="Segure para apagar todos os resultados visíveis (respeita filtros e pesquisa)">
+      <svg class="icon" viewBox="0 0 24 24" style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg><span>Apagar tudo</span>
     </button>
   </nav>
 
   <main id="downloads-container">
     <div id="loading" class="state-message">
       <div class="spinner"></div>
-      <span>Loading downloads...</span>
+      <span>Carregando downloads...</span>
     </div>
     <div id="empty" class="state-message hidden">
       <svg viewBox="0 0 24 24" width="40" height="40"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round"/><polyline points="7 10 12 15 17 10" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round"/></svg>
-      <span>No downloads found</span>
+      <span>Nenhum download encontrado</span>
     </div>
     <div id="no-api" class="state-message hidden">
       <svg viewBox="0 0 24 24" width="40" height="40"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/></svg>
-      <span>Enter your API token to get started</span>
-      <button id="btn-setup-api" class="action-btn primary" style="margin-top:8px;">Set API Token</button>
+      <span>Insira seu token de API para começar</span>
+      <button id="btn-setup-api" class="action-btn primary" style="margin-top:8px;">Configurar Token da API</button>
     </div>
     <ul id="download-list"></ul>
   </main>
