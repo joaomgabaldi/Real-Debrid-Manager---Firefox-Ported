@@ -26,7 +26,7 @@ function updateContextMenu() {
       if (enabled) {
         browser.contextMenus.create({
           id: 'send-to-rd',
-          title: 'Send to RD Manager',
+          title: 'Enviar para o RD Manager',
           contexts: ['link', 'selection']
         });
       }
@@ -109,8 +109,8 @@ async function checkForCompletedDownloads() {
     const merged = [
       ...justCompleted.map(dl => ({
         id: `${dl.id}-${Date.now()}`,
-        title: 'Download Available',
-        message: dl.name || 'A download has finished',
+        title: 'Download Disponível',
+        message: dl.name || 'Um download foi concluído',
         type: dl.type,
         created_at: new Date().toISOString(),
         read: false,
@@ -226,7 +226,7 @@ async function unrestrictLink(apiKey, link) {
   if (data.download) {
     const entry = {
       id: data.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: data.filename || 'Unnamed Download',
+      name: data.filename || 'Download sem nome',
       size: data.filesize || 0,
       progress: 1,
       download_state: 'completed',
