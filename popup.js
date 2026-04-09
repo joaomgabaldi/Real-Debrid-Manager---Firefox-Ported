@@ -1,5 +1,5 @@
 /* ============================================
-   Real-Debrid Manager — Firefox Extension Logic
+   RD Manager — Firefox Extension Logic
    ============================================ */
 
 const API_BASE = 'https://api.real-debrid.com/rest/1.0';
@@ -1286,7 +1286,7 @@ function showApiKeyModal() {
         el('div', {className: 'toggle-row'},
           el('div', {},
             el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Right-click context menu'),
-            el('div', {className: 'form-hint'}, 'Show "Send to Real-Debrid Lite" when right-clicking links.')
+            el('div', {className: 'form-hint'}, 'Show "Send to RD Manager" when right-clicking links.')
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-context-menu', checked: contextMenuEnabled ? 'checked' : null}),
