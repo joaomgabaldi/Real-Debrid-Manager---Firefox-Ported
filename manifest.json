@@ -5,8 +5,11 @@
    "description": "Gerencie todos os seus downloads do Real-Debrid em uma janela simples.",
    "browser_specific_settings": {
       "gecko": {
-         "id": "rd-manager@seu-dominio.com",
-         "strict_min_version": "109.0"
+         "id": "{4b8c9d1e-2f3a-4e5d-b6c7-8a9b0c1d2e3f}",
+         "strict_min_version": "109.0",
+		 "data_collection_permissions": {
+            "required": ["none"]
+		 }
       }
    },
    "permissions": [ "storage", "contextMenus", "alarms" ],
