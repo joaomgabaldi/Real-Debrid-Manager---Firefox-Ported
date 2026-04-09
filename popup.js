@@ -265,7 +265,7 @@ function bindEvents() {
     cycleIndex = (cycleIndex + 1) % (cycleStates.length + 1);
     if (cycleIndex === cycleStates.length) {
       cycleIndex = -1;
-      cycleBtn.textContent = 'Type';
+      cycleBtn.textContent = 'Tipo';
       cycleBtn.dataset.cycleState = 'none';
       delete cycleBtn.dataset.cycleType;
       cycleBtn.classList.remove('active');
@@ -408,8 +408,8 @@ function parseTorrentInfo(info) {
     links: info.links || [],
     files: selectedFiles.map((f, idx) => ({
       id: idx,
-      name: f.path ? f.path.replace(/^\//, '') : `File ${idx + 1}`,
-      short_name: f.path ? f.path.split('/').pop() : `File ${idx + 1}`,
+      name: f.path ? f.path.replace(/^\//, '') : `Arquivo ${idx + 1}`,
+      short_name: f.path ? f.path.split('/').pop() : `Arquivo ${idx + 1}`,
       size: f.bytes || 0,
     })),
   };
@@ -432,7 +432,7 @@ async function fetchTorrentFiles(dl, itemEl) {
     itemEl.dataset.fileCount = String(dl.files.length);
     cacheData(allDownloads);
   } catch (err) {
-    console.error('Failed to fetch torrent files:', err);
+    console.error('Falha ao buscar torrent files:', err);
   }
 }
 
@@ -473,7 +473,7 @@ async function deleteDownload(type, id) {
 
   try {
     if (type === 'torrent') {
-      toast('Deleting...', 'success');
+      toast('Excluindo...', 'success');
       await apiDelete(`/torrents/delete/${id}`);
     } else if (type === 'web') {
       const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
@@ -495,9 +495,9 @@ async function deleteDownload(type, id) {
     cacheData(allDownloads);
 
     if (allDownloads.length === 0) showState('empty');
-    toast('Removed', 'success');
+    toast('Removido', 'success');
   } catch (err) {
-    toast('Delete failed', 'error');
+    toast('Falha ao excluir', 'error');
     if (itemElement) {
       itemElement.style.opacity = '1';
       itemElement.style.pointerEvents = 'auto';
@@ -531,7 +531,7 @@ async function deleteAllVisible() {
     renderDownloads();
   }, 150);
 
-  toast('Deleting...', 'success');
+  toast('Excluindo...', 'success');
 
   const webTargets = targets.filter(dl => dl._type === 'web');
   const torrentTargets = targets.filter(dl => dl._type === 'torrent');
@@ -554,7 +554,7 @@ async function deleteAllVisible() {
 }
 
 async function downloadFile(type, id) {
-  toast('Downloading...', 'success');
+  toast('Iniciando download...', 'success');
   try {
     const dl = allDownloads.find(d => String(d.id) === String(id));
 
@@ -573,23 +573,23 @@ async function downloadFile(type, id) {
       if (links.length > 0) {
         const unrestricted = await apiPost('/unrestrict/link', { link: links[0] }, false, TIMEOUT_DOWNLOAD_MS);
         if (unrestricted?.download) triggerDownload(unrestricted.download);
-        else toast('Failed to get download link', 'error');
+        else toast('Falha ao obter link de download', 'error');
       } else {
-        toast('No download links available', 'error');
+        toast('Nenhum link de download disponível', 'error');
       }
       return;
     }
 
-    toast('Unknown download type', 'error');
+    toast('Tipo de download desconhecido', 'error');
   } catch (err) {
-    const msg = err.name === 'AbortError' ? 'Download request timed out' : 'Failed to download';
+    const msg = err.name === 'AbortError' ? 'O pedido de download expirou' : 'Falha ao baixar';
     toast(msg, 'error');
   }
 }
 
 function triggerDownload(url) {
   if (!String(url).startsWith('https://')) {
-    toast('Invalid download link', 'error');
+    toast('Link de download inválido', 'error');
     return;
   }
   const a = document.createElement('a');
@@ -671,7 +671,7 @@ async function fetchAll(isBackgroundSync = false) {
         }
       }
     } catch (err) {
-      console.warn('Failed to fetch torrents:', err);
+      console.warn('Falha ao buscar torrents:', err);
     }
 
     if (isBackgroundSync && allDownloads.length > 0) {
@@ -743,14 +743,14 @@ async function fetchAll(isBackgroundSync = false) {
 
   } catch (err) {
     if (allDownloads.length === 0) showState('empty');
-    toast('Failed to fetch downloads', 'error');
+    toast('Falha ao buscar downloads', 'error');
   }
 }
 
 function normalizeTorrent(t) {
   return {
     id: t.id,
-    name: t.filename || 'Unnamed Torrent',
+    name: t.filename || 'Torrent sem nome',
     size: t.bytes || 0,
     progress: (t.progress || 0) / 100,
     download_state: mapRdStatus(t.status),
@@ -786,7 +786,7 @@ function saveLocalDownloads(unrestrictResults) {
       const existing = data.rd_local_downloads || [];
       const newEntries = unrestrictResults.map(d => ({
         id: d.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: d.filename || 'Unnamed Download',
+        name: d.filename || 'Download sem nome',
         size: d.filesize || 0,
         progress: 1,
         download_state: 'completed',
@@ -838,7 +838,7 @@ async function fetchUserInfo() {
       browser.storage.local.set({ rd_cached_user: res });
     }
   } catch (err) {
-    console.error('Failed to fetch user info');
+    console.error('Falha ao buscar informações do usuário');
   }
 }
 
@@ -863,13 +863,13 @@ function showUserBar(data) {
 }
 
 function calculateDaysRemaining(expiresAt) {
-  if (!expiresAt) return '— days left';
+  if (!expiresAt) return '— dias restantes';
   const [y, m, d] = expiresAt.slice(0, 10).split('-').map(Number);
   const now = new Date();
   const diffDays = Math.round(
     (Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000
   );
-  return `${diffDays} day${diffDays === 1 ? '' : 's'} left`;
+  return `${diffDays} dia${diffDays === 1 ? '' : 's'} restante${diffDays === 1 ? '' : 's'}`;
 }
 
 function filterByAge(downloads, days) {
@@ -888,12 +888,12 @@ function updateAgeFilterUI() {
   });
 
   if (ageFilterDays) {
-    const labels = { 1: '> 1 day', 7: '> 1 week', 30: '> 1 month' };
+    const labels = { 1: '> 1 dia', 7: '> 1 semana', 30: '> 1 mês' };
     label.textContent = labels[ageFilterDays];
     btn.classList.add('active');
     clearOpt.classList.remove('hidden');
   } else {
-    label.textContent = 'Older than...';
+    label.textContent = 'Mais antigo que...';
     btn.classList.remove('active');
     clearOpt.classList.add('hidden');
   }
@@ -922,7 +922,7 @@ function renderDownloads() {
   const searchCountEl = $('#search-count');
   if (searchCountEl) {
     if (searchQuery || ageFilterDays) {
-      searchCountEl.textContent = `${currentFiltered.length} results`;
+      searchCountEl.textContent = `${currentFiltered.length} resultados`;
       searchCountEl.classList.remove('hidden');
     } else {
       searchCountEl.textContent = '';
@@ -981,7 +981,7 @@ function renderDownloads() {
           dlBtn.className = 'dl-download-btn';
           dlBtn.dataset.type = dl._type;
           dlBtn.dataset.id = String(dl.id);
-          dlBtn.title = 'Download';
+          dlBtn.title = 'Baixar';
           const dlBtnIcon = makeDownloadSvg();
           dlBtnIcon.style.cssText = 'position:relative;z-index:1;';
           dlBtn.appendChild(dlBtnIcon);
@@ -1027,7 +1027,7 @@ function renderItemMeta(dl) {
 
   const metaEl = document.createElement('div');
   metaEl.className = 'dl-meta';
-  metaEl.title = dl.name || 'Unnamed Download';
+  metaEl.title = dl.name || 'Download sem nome';
 
   const statusSpan = document.createElement('span');
   statusSpan.className = 'dl-status';
@@ -1049,15 +1049,15 @@ function renderItemMeta(dl) {
       const name = largest.short_name || largest.name || '';
       const dotIdx = name.lastIndexOf('.');
       if (dotIdx > 0) metaParts.push(name.slice(dotIdx + 1).toUpperCase());
-      metaParts.push(`${fileCount} file${fileCount !== 1 ? 's' : ''}`);
+      metaParts.push(`${fileCount} arquivo${fileCount !== 1 ? 's' : ''}`);
     }
     const addedTime = dl.created_at ? formatTimeAgo(dl.created_at) : null;
-    if (addedTime) metaParts.push(`added ${addedTime}`);
+    if (addedTime) metaParts.push(`adicionado ${addedTime}`);
     infoSpan.textContent = metaParts.join(' • ');
   } else {
     const speed = dl.download_speed ? `${formatBytes(dl.download_speed)}/s` : '';
     const seeds = dl.seeds != null ? `${dl.seeds} Seeds` : '';
-    const eta = (dl.eta && dl.eta < 864000) ? `${formatETA(dl.eta)} ETA` : (dl.eta ? 'No ETA' : '');
+    const eta = (dl.eta && dl.eta < 864000) ? `${formatETA(dl.eta)} Previsto` : (dl.eta ? 'Sem previsão' : '');
     infoSpan.textContent = [size, seeds, speed, eta].filter(Boolean).join(' • ');
   }
 
@@ -1095,11 +1095,11 @@ function renderExpandedContent(dl) {
       files.forEach((f, idx) => {
         const li = document.createElement('li');
         li.className = 'dl-file-item dl-file-info';
-        li.title = fileBaseName(f.name || f.short_name || `File ${idx + 1}`);
+        li.title = fileBaseName(f.name || f.short_name || `Arquivo ${idx + 1}`);
         li.style.cursor = 'default';
         const fnameEl = document.createElement('span');
         fnameEl.className = 'dl-file-name';
-        fnameEl.textContent = f.short_name || f.name || `File ${idx + 1}`;
+        fnameEl.textContent = f.short_name || f.name || `Arquivo ${idx + 1}`;
         fnameEl.style.opacity = '0.7';
         const fsize = document.createElement('span');
         fsize.className = 'dl-file-size';
@@ -1113,7 +1113,7 @@ function renderExpandedContent(dl) {
     } else {
       const noFiles = document.createElement('div');
       noFiles.className = 'dl-no-files';
-      noFiles.textContent = 'No file info available';
+      noFiles.textContent = 'Nenhuma informação de arquivo disponível';
       expandedContent.appendChild(noFiles);
     }
   } else if (type === 'web' && dl._rd_download) {
@@ -1137,7 +1137,7 @@ function renderExpandedContent(dl) {
   } else {
     const noFiles = document.createElement('div');
     noFiles.className = 'dl-no-files';
-    noFiles.textContent = 'Files available once download completes';
+    noFiles.textContent = 'Arquivos disponíveis quando o download for concluído';
     expandedContent.appendChild(noFiles);
   }
 
@@ -1145,7 +1145,7 @@ function renderExpandedContent(dl) {
 }
 
 function renderItem(dl) {
-  const name = dl.name || 'Unnamed Download';
+  const name = dl.name || 'Download sem nome';
   const type = dl._type;
   const completed = isCompleted(dl);
 
@@ -1168,7 +1168,7 @@ function renderItem(dl) {
     dlBtn.className = 'dl-download-btn';
     dlBtn.dataset.type = type;
     dlBtn.dataset.id = String(dl.id);
-    dlBtn.title = 'Download';
+    dlBtn.title = 'Baixar';
     const dlBtnIcon = makeDownloadSvg();
     dlBtnIcon.style.cssText = 'position:relative;z-index:1;';
     dlBtn.appendChild(dlBtnIcon);
@@ -1179,7 +1179,7 @@ function renderItem(dl) {
   deleteBtn.className = 'dl-delete-btn';
   deleteBtn.dataset.type = type;
   deleteBtn.dataset.id = String(dl.id);
-  deleteBtn.title = 'Delete';
+  deleteBtn.title = 'Excluir';
   const deleteBtnIcon = makeTrashSvg();
   deleteBtnIcon.style.cssText = 'position:relative;z-index:1;';
   deleteBtn.appendChild(deleteBtnIcon);
@@ -1199,12 +1199,13 @@ function renderItem(dl) {
 
 function isCompleted(dl) {
   const s = (dl.download_state || '').toLowerCase();
-  if (s === 'processing' || s === 'waiting_selection' || s.includes('queue')) return false;
-  return s === 'completed' || (dl.progress != null && dl.progress >= 1);
+  if (s === 'processing' || s === 'waiting_selection' || s.includes('queue') || s === 'processando' || s === 'aguardando seleção' || s === 'na fila') return false;
+  return s === 'completed' || s === 'concluído' || (dl.progress != null && dl.progress >= 1);
 }
 
 function isReady(dl) {
-  return (dl.download_state || '').toLowerCase() === 'completed';
+  const s = (dl.download_state || '').toLowerCase();
+  return s === 'completed' || s === 'concluído';
 }
 
 function canDownload(dl) {
@@ -1215,17 +1216,36 @@ function canDownload(dl) {
 
 function getStatus(dl) {
   const s = dl.download_state || '';
-  if (!s) return dl.progress >= 1 ? 'completed' : 'unknown';
-  return s.toLowerCase().replace(/_/g, ' ');
+  if (!s) return dl.progress >= 1 ? 'concluído' : 'desconhecido';
+  
+  const state = s.toLowerCase();
+  const stateMap = {
+    'error': 'erro',
+    'magnet_error': 'erro',
+    'virus': 'erro',
+    'dead': 'erro',
+    'processing': 'processando',
+    'compressing': 'processando',
+    'magnet_conversion': 'processando',
+    'waiting_selection': 'aguardando seleção',
+    'waiting_files_selection': 'aguardando seleção',
+    'queued': 'na fila',
+    'downloading': 'baixando',
+    'completed': 'concluído',
+    'downloaded': 'concluído',
+    'uploading': 'enviando',
+    'unknown': 'desconhecido'
+  };
+  
+  return stateMap[state] || state.replace(/_/g, ' ');
 }
 
 function getStatusClass(status) {
-  if (status.includes('complet')) return 'completed';
-  if (status.includes('download') || status.includes('uploading')) return 'downloading';
-  if (status.includes('process') || status.includes('compress')) return 'downloading';
-  if (status.includes('waiting')) return 'queued';
-  if (status.includes('error') || status.includes('dead') || status.includes('virus')) return 'error';
-  if (status.includes('queue')) return 'queued';
+  if (status.includes('concluíd') || status.includes('complet')) return 'completed';
+  if (status.includes('baixando') || status.includes('enviando') || status.includes('download') || status.includes('uploading')) return 'downloading';
+  if (status.includes('processando') || status.includes('process') || status.includes('compress')) return 'downloading';
+  if (status.includes('aguardando') || status.includes('na fila') || status.includes('waiting') || status.includes('queue')) return 'queued';
+  if (status.includes('erro') || status.includes('error') || status.includes('dead') || status.includes('virus')) return 'error';
   return 'downloading';
 }
 
@@ -1285,8 +1305,8 @@ function showApiKeyModal() {
       el('div', {className: 'form-group'},
         el('div', {className: 'toggle-row'},
           el('div', {},
-            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Right-click context menu'),
-            el('div', {className: 'form-hint'}, 'Show "Send to RD Manager" when right-clicking links.')
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Menu de contexto do botão direito'),
+            el('div', {className: 'form-hint'}, 'Mostrar "Enviar para o RD Manager" ao clicar com o botão direito em links.')
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-context-menu', checked: contextMenuEnabled ? 'checked' : null}),
@@ -1298,10 +1318,10 @@ function showApiKeyModal() {
         el('div', {className: 'toggle-row'},
           el('div', {},
             el('div', {style: 'display:flex;align-items:center;gap:5px;margin-bottom:2px;'},
-              el('div', {className: 'form-label', style: 'margin-bottom:0;'}, 'Download notifications'),
-              el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Won\'t send background requests if off.'))
+              el('div', {className: 'form-label', style: 'margin-bottom:0;'}, 'Notificações de download'),
+              el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Não enviará requisições em segundo plano se desativado.'))
             ),
-            el('div', {className: 'form-hint'}, 'Notify me when downloads are ready.')
+            el('div', {className: 'form-hint'}, 'Notifique-me quando os downloads estiverem prontos.')
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-notifications', checked: notificationsEnabled ? 'checked' : null}),
@@ -1312,8 +1332,8 @@ function showApiKeyModal() {
       el('div', {className: 'form-group'},
         el('div', {className: 'toggle-row'},
           el('div', {},
-            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Hover lift effect'),
-            el('div', {className: 'form-hint'}, 'Adds a subtle lift and shadow.')
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Efeito de elevação ao passar o mouse'),
+            el('div', {className: 'form-hint'}, 'Adiciona uma elevação sutil e sombra.')
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-hover-lift', checked: hoverLiftEnabled ? 'checked' : null}),
@@ -1325,17 +1345,17 @@ function showApiKeyModal() {
         el('div', {className: 'settings-split-row'},
           el('div', {className: 'settings-split-col'},
             el('label', {className: 'form-label', style: 'margin-bottom:6px;'},
-              el('span', {style: 'display:inline-flex;align-items:center;gap:5px;'}, 'Max height ',
+              el('span', {style: 'display:inline-flex;align-items:center;gap:5px;'}, 'Altura máxima ',
                 el('span', {className: 'slider-value-inline', id: 'max-height-value'}, currentMaxHeight + 'px'),
-                el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Scales window height.'))
+                el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Ajusta a altura da janela.'))
               )
             ),
             el('input', {type: 'range', id: 'input-max-height', className: 'settings-slider', min: '400', max: '600', step: '10', value: String(currentMaxHeight)})
           ),
           el('div', {className: 'settings-split-col settings-split-right'},
-            el('label', {className: 'form-label', style: 'margin-bottom:6px;'}, 'Accent color'),
+            el('label', {className: 'form-label', style: 'margin-bottom:6px;'}, 'Cor de destaque'),
             el('div', {className: 'accent-picker-row'},
-              el('button', {id: 'btn-reset-accent', className: 'accent-reset-btn'}, 'Reset'),
+              el('button', {id: 'btn-reset-accent', className: 'accent-reset-btn'}, 'Redefinir'),
               el('input', {type: 'color', id: 'input-accent-color', className: 'accent-color-input small', value: customAccent || defaultColor})
             )
           )
@@ -1343,10 +1363,10 @@ function showApiKeyModal() {
       ),
       el('div', {className: 'settings-account-section'},
         el('div', {className: 'form-group', style: 'margin-bottom:10px;'},
-          el('label', {className: 'form-label'}, 'API Token ', el('span', {className: 'form-label-normal'}, '(from ', el('a', {href: 'https://real-debrid.com/apitoken', target: '_blank', className: 'form-label-link'}, 'Real-Debrid'), ')')),
+          el('label', {className: 'form-label'}, 'Token da API ', el('span', {className: 'form-label-normal'}, '(do ', el('a', {href: 'https://real-debrid.com/apitoken', target: '_blank', className: 'form-label-link'}, 'Real-Debrid'), ')')),
           el('div', {className: 'api-key-row'},
-            el('input', {type: 'password', className: 'form-input', id: 'input-api-key', value: apiKey, placeholder: 'Paste your Real-Debrid API token', spellcheck: 'false'}),
-            el('button', {className: 'api-key-save', id: 'save-api-key', disabled: 'disabled', title: 'Edit token to save'}, 'Save')
+            el('input', {type: 'password', className: 'form-input', id: 'input-api-key', value: apiKey, placeholder: 'Cole seu token de API do Real-Debrid', spellcheck: 'false'}),
+            el('button', {className: 'api-key-save', id: 'save-api-key', disabled: 'disabled', title: 'Edite o token para salvar'}, 'Salvar')
           )
         ),
         el('div', {className: 'settings-account-footer'},
@@ -1354,12 +1374,12 @@ function showApiKeyModal() {
             makeSvg([['path',{d:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}],['circle',{cx:'12',cy:'7',r:'4'}]]),
             el('span', {className: 'settings-account-name'}, username)
           ),
-          el('span', {className: 'settings-account-points'}, userPoints + ' Fidelity Points')
+          el('span', {className: 'settings-account-points'}, userPoints + ' Pontos de Fidelidade')
         )
       )
     );
 
-    openModalWithNode('Settings', body);
+    openModalWithNode('Configurações', body);
 
     $('#toggle-context-menu').addEventListener('change', (e) => browser.storage.local.set({ rd_context_menu: e.target.checked }));
     $('#toggle-notifications').addEventListener('change', (e) => {
@@ -1397,12 +1417,12 @@ function showApiKeyModal() {
     apiKeyInput.addEventListener('input', () => {
       const changed = apiKeyInput.value.trim() !== savedKey;
       saveBtn.disabled = !changed;
-      saveBtn.title = changed ? '' : 'Edit token to save';
+      saveBtn.title = changed ? '' : 'Edite o token para salvar';
     });
 
     saveBtn.addEventListener('click', async () => {
       const key = apiKeyInput.value.trim();
-      if (!key) return toast('Please enter a valid key', 'error');
+      if (!key) return toast('Por favor, insira uma chave válida', 'error');
 
       saveBtn.disabled = true;
       saveBtn.classList.add('loading');
@@ -1416,22 +1436,22 @@ function showApiKeyModal() {
 
         saveApiKey(key);
         saveBtn.textContent = '✓';
-        toast('API token saved!', 'success');
+        toast('Token da API salvo!', 'success');
         showUserBar(data);
         browser.storage.local.set({ rd_cached_user: data });
 
         const nameEl = document.querySelector('.settings-account-name');
         const pointsEl = document.querySelector('.settings-account-points');
         if (nameEl) nameEl.textContent = data.username || data.email || '—';
-        if (pointsEl) pointsEl.textContent = (data.points != null ? data.points.toLocaleString() : '—') + ' Fidelity Points';
+        if (pointsEl) pointsEl.textContent = (data.points != null ? data.points.toLocaleString() : '—') + ' Pontos de Fidelidade';
 
         fetchAll();
         fetchUserInfo();
       } catch (err) {
-        toast(err.name === 'AbortError' ? 'Validation timed out' : 'Invalid API token', 'error');
+        toast(err.name === 'AbortError' ? 'A validação expirou' : 'Token de API inválido', 'error');
         saveBtn.disabled = false;
         saveBtn.classList.remove('loading');
-        saveBtn.textContent = 'Save';
+        saveBtn.textContent = 'Salvar';
       }
     });
 
@@ -1458,22 +1478,22 @@ function showTorrentModal() {
     el('div', {className: 'form-group'},
       el('div', {className: 'form-label-row'},
         el('div', {className: 'form-label-left'},
-          el('label', {className: 'form-label'}, 'Magnet Link'),
-          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Paste a magnet link or upload a .torrent file.'))
+          el('label', {className: 'form-label'}, 'Link Magnet'),
+          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Cole um link magnet ou faça upload de um arquivo .torrent.'))
         )
       ),
       el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'})
     ),
-    el('div', {className: 'form-divider'}, el('span', {}, 'or')),
+    el('div', {className: 'form-divider'}, el('span', {}, 'ou')),
     el('div', {className: 'form-group'},
       el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent', style: 'display:none'}),
-      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), 'Select .torrent File'),
+      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), 'Selecionar arquivo .torrent'),
       el('div', {className: 'form-file-name', id: 'selected-file-name'})
     ),
-    el('button', {className: 'form-submit', id: 'submit-torrent'}, 'Add Torrent ', el('span', {className: 'btn-spinner'}))
+    el('button', {className: 'form-submit', id: 'submit-torrent'}, 'Adicionar Torrent ', el('span', {className: 'btn-spinner'}))
   );
 
-  openModalWithNode('Add Torrent', body);
+  openModalWithNode('Adicionar Torrent', body);
 
   const magnetInput = $('#input-magnet');
   const fileInput = $('#input-torrent-file');
@@ -1505,11 +1525,11 @@ function showTorrentModal() {
     const magnet = magnetInput.value.trim();
     const file = fileInput.files[0];
 
-    if (!magnet && !file) return toast('Enter a magnet link or select a file', 'error');
+    if (!magnet && !file) return toast('Insira um link magnet ou selecione um arquivo', 'error');
 
     submitBtn.disabled = true;
     submitBtn.classList.add('loading');
-    submitBtn.replaceChildren('Adding...', el('span', {className: 'btn-spinner'}));
+    submitBtn.replaceChildren('Adicionando...', el('span', {className: 'btn-spinner'}));
 
     try {
       let torrentId = null;
@@ -1525,9 +1545,9 @@ function showTorrentModal() {
         if (torrentId) await apiPost(`/torrents/selectFiles/${torrentId}`, { files: 'all' });
       } else {
         if (!magnet.startsWith('magnet:')) {
-          toast('Invalid magnet link', 'error');
+          toast('Link magnet inválido', 'error');
           submitBtn.disabled = false;
-          submitBtn.textContent = 'Add Torrent';
+          submitBtn.textContent = 'Adicionar Torrent';
           return;
         }
         const data = await apiPost('/torrents/addMagnet', { magnet: magnet });
@@ -1536,15 +1556,15 @@ function showTorrentModal() {
       }
 
       if (torrentId) await trackId(String(torrentId));
-      toast('Torrent added!', 'success');
+      toast('Torrent adicionado!', 'success');
       closeModal();
       fetchAll();
       browser.runtime.sendMessage('rd-check-now');
     } catch (err) {
-      toast('Failed to add torrent', 'error');
+      toast('Falha ao adicionar torrent', 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
-      submitBtn.replaceChildren('Add Torrent', el('span', {className: 'btn-spinner'}));
+      submitBtn.replaceChildren('Adicionar Torrent', el('span', {className: 'btn-spinner'}));
     }
   });
 
@@ -1562,29 +1582,29 @@ function showWebLinkModal() {
       el('div', {className: 'form-label-row'},
         el('div', {className: 'form-label-left'},
           el('label', {className: 'form-label'}, 'URL'),
-          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Paste hoster links to unrestrict them.'))
+          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Cole links de servidores para desbloqueá-los.'))
         ),
         el('div', {className: 'form-label-icons'},
-          el('a', {href: 'https://real-debrid.com/compare', target: '_blank', className: 'hosters-link', title: 'View supported hosters'}, compareSvg.cloneNode(true), 'Supported hosters')
+          el('a', {href: 'https://real-debrid.com/compare', target: '_blank', className: 'hosters-link', title: 'Ver servidores suportados'}, compareSvg.cloneNode(true), 'Servidores suportados')
         )
       ),
       el('textarea', {className: 'form-input', id: 'input-weblink', placeholder: 'https://1fichier.com/...\nhttps://rapidgator.net/...', rows: '5', spellcheck: 'false'})
     ),
-    el('button', {className: 'form-submit', id: 'submit-weblink'}, 'Unrestrict ', el('span', {className: 'btn-spinner'}))
+    el('button', {className: 'form-submit', id: 'submit-weblink'}, 'Desbloquear ', el('span', {className: 'btn-spinner'}))
   );
 
-  openModalWithNode('Unrestrict Link', body);
+  openModalWithNode('Desbloquear Link', body);
 
   const urlInput = $('#input-weblink');
   const submitBtn = $('#submit-weblink');
 
   submitBtn.addEventListener('click', async () => {
     const urls = urlInput.value.split('\n').map(l => l.trim()).filter(l => l.startsWith('http://') || l.startsWith('https://'));
-    if (urls.length === 0) return toast('Enter at least one valid URL', 'error');
+    if (urls.length === 0) return toast('Insira pelo menos um URL válido', 'error');
 
     submitBtn.disabled = true;
     submitBtn.classList.add('loading');
-    submitBtn.replaceChildren('Unrestricting...', el('span', {className: 'btn-spinner'}));
+    submitBtn.replaceChildren('Desbloqueando...', el('span', {className: 'btn-spinner'}));
 
     try {
       const results = await Promise.allSettled(urls.map(url => apiPost('/unrestrict/link', { link: url })));
@@ -1598,24 +1618,24 @@ function showWebLinkModal() {
       if (succeeded.length > 0) await saveLocalDownloads(succeeded);
 
       if (failed === 0) {
-        toast(urls.length > 1 ? `${succeeded.length} links unrestricted!` : 'Link unrestricted!', 'success');
+        toast(urls.length > 1 ? `${succeeded.length} links desbloqueados!` : 'Link desbloqueado!', 'success');
         closeModal();
         fetchAll();
       } else if (succeeded.length === 0) {
-        toast('All links failed', 'error');
+        toast('Falha em todos os links', 'error');
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading');
-        submitBtn.replaceChildren('Unrestrict', el('span', {className: 'btn-spinner'}));
+        submitBtn.replaceChildren('Desbloquear', el('span', {className: 'btn-spinner'}));
       } else {
-        toast(`${succeeded.length} unrestricted, ${failed} failed`, 'error');
+        toast(`${succeeded.length} desbloqueados, ${failed} falharam`, 'error');
         closeModal();
         fetchAll();
       }
     } catch (err) {
-      toast('Failed to unrestrict link', 'error');
+      toast('Falha ao desbloquear o link', 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
-      submitBtn.replaceChildren('Unrestrict', el('span', {className: 'btn-spinner'}));
+      submitBtn.replaceChildren('Desbloquear', el('span', {className: 'btn-spinner'}));
     }
   });
 
@@ -1655,9 +1675,9 @@ function formatTimeAgo(dateStr) {
   const date = new Date(dateStr);
   if (isNaN(date)) return null;
   const diffDays = Math.floor(Math.abs(Date.now() - date.getTime()) / 86400000);
-  if (diffDays === 0) return 'recently';
-  if (diffDays === 1) return '1d ago';
-  return `${diffDays}d ago`;
+  if (diffDays === 0) return 'agora mesmo';
+  if (diffDays === 1) return 'há 1d';
+  return `há ${diffDays}d`;
 }
 
 function capitalize(str) {
@@ -1727,8 +1747,8 @@ async function updateBellFromDownloads(downloads) {
   const merged = [
     ...justCompleted.map(dl => ({
       id: `${dl.id}-${Date.now()}`,
-      title: 'Download Available',
-      message: dl.name || 'A download has finished',
+      title: 'Download Disponível',
+      message: dl.name || 'Um download foi concluído',
       type: dl._type,
       created_at: new Date().toISOString(),
       read: false,
@@ -1762,7 +1782,7 @@ function showNotificationsModal() {
     notifications.forEach(n => {
       const item = el('div', {className: 'notification-item unread'},
         el('div', {className: 'notification-header'},
-          el('span', {className: 'notification-title'}, n.title || 'Download Available'),
+          el('span', {className: 'notification-title'}, n.title || 'Download Disponível'),
           el('span', {className: 'notification-time'}, formatTimeAgo(n.created_at))
         ),
         el('div', {className: 'notification-message'}, n.message || '')
@@ -1778,7 +1798,7 @@ function showNotificationsModal() {
           item.remove();
           if (notifications.length === 0) {
             const list = $('#notifications-list');
-            if (list) list.replaceChildren(el('div', {className: 'notifications-empty'}, 'No notifications'));
+            if (list) list.replaceChildren(el('div', {className: 'notifications-empty'}, 'Nenhuma notificação'));
             $('#btn-mark-all-read')?.remove();
           }
         }, 150);
@@ -1787,17 +1807,17 @@ function showNotificationsModal() {
     });
     bodyEl.appendChild(listEl);
   } else {
-    bodyEl.appendChild(el('div', {className: 'notifications-empty'}, 'No notifications'));
+    bodyEl.appendChild(el('div', {className: 'notifications-empty'}, 'Nenhuma notificação'));
   }
 
-  openModalWithNode('Notifications', bodyEl);
+  openModalWithNode('Notificações', bodyEl);
 
   if (hasNotifications) {
     const modalHeader = $('.modal-header');
     const markAllBtn = document.createElement('button');
     markAllBtn.className = 'notifications-mark-all';
     markAllBtn.id = 'btn-mark-all-read';
-    markAllBtn.textContent = 'Clear all';
+    markAllBtn.textContent = 'Limpar tudo';
     modalHeader.insertBefore(markAllBtn, $('#modal-close'));
 
     markAllBtn.addEventListener('click', async () => {
@@ -1836,5 +1856,5 @@ async function clearAllNotifications() {
   await browser.storage.local.set({ rd_local_notifications: updated });
   notifications = [];
   updateNotificationBadge();
-  toast('All notifications cleared', 'success');
+  toast('Todas as notificações limpas', 'success');
 }
