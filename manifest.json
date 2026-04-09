@@ -9,7 +9,7 @@
          "strict_min_version": "109.0"
       }
    },
-"permissions": [ "storage", "contextMenus", "alarms", "unlimitedStorage" ],
+   "permissions": [ "storage", "contextMenus", "alarms" ],
    "host_permissions": [ "https://api.real-debrid.com/*" ],
    "background": {
       "scripts": ["background.js"]
