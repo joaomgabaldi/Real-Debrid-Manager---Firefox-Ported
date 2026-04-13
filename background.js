@@ -2,6 +2,7 @@ const API_BASE = 'https://api.real-debrid.com/rest/1.0';
 const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
 const ALARM_NAME = 'rd-completion-check';
 const POLL_INTERVAL_MINUTES = 1;
+const DEFAULT_BADGE_COLOR = '#1a9c4a';
 
 browser.runtime.onInstalled.addListener(async () => {
   scheduleAlarm();
@@ -156,15 +157,8 @@ async function checkForCompletedDownloads() {
   }
 }
 
-const DEFAULT_BADGE_COLOR = '#1a9c4a';
-
-async function getBadgeAccent() {
-  const { rd_accent_color } = await browser.storage.local.get('rd_accent_color');
-  return rd_accent_color || DEFAULT_BADGE_COLOR;
-}
-
 async function withPendingBadge(workFn) {
-  browser.action.setBadgeBackgroundColor({ color: await getBadgeAccent() });
+  browser.action.setBadgeBackgroundColor({ color: DEFAULT_BADGE_COLOR });
   browser.action.setBadgeText({ text: '...' });
   await workFn();
 }
@@ -311,14 +305,14 @@ async function updateBadgeCount() {
   const unread = (rd_local_notifications || []).filter(n => !n.read).length;
   if (unread > 0) {
     browser.action.setBadgeText({ text: unread > 99 ? '99+' : String(unread) });
-    browser.action.setBadgeBackgroundColor({ color: await getBadgeAccent() });
+    browser.action.setBadgeBackgroundColor({ color: DEFAULT_BADGE_COLOR });
   } else {
     browser.action.setBadgeText({ text: '' });
   }
 }
 
 async function showBadge(success) {
-  browser.action.setBadgeBackgroundColor({ color: success ? await getBadgeAccent() : '#f46878' });
+  browser.action.setBadgeBackgroundColor({ color: success ? DEFAULT_BADGE_COLOR : '#f46878' });
   browser.action.setBadgeText({ text: success ? '✓' : '!' });
   setTimeout(() => updateBadgeCount(), 2000);
 }
