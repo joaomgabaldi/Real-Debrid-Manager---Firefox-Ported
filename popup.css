@@ -122,7 +122,7 @@ html {
 body {
   width: 420px;
   min-height: 400px;
-  max-height: 400px;
+  max-height: 550px;
   font-family: var(--font-main);
   background: var(--bg-base);
   color: var(--text);
