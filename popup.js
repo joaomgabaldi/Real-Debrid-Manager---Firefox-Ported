@@ -167,18 +167,13 @@ function enforceSelectionLock() {
 }
 
 async function loadSettings() {
-  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
+  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_use_jdownloader']).then((data) => {
     const theme = data.rd_theme || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
     document.documentElement.setAttribute('data-hover-lift', hoverLift);
     useJDownloader = data.rd_use_jdownloader === true;
-    applyMaxHeight(data.rd_max_height || 400);
   });
-}
-
-function applyMaxHeight(px) {
-  document.body.style.maxHeight = px + 'px';
 }
 
 function saveTheme(theme) {
@@ -1417,7 +1412,7 @@ function closeModal(force = false) {
 
 function showAuthModal(autoStartOauth = false) {
   const autoStart = autoStartOauth === true;
-  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_cached_user', 'rd_max_height', 'rd_use_jdownloader', 'rd_oauth_pending']).then((data) => {
+  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_cached_user', 'rd_use_jdownloader', 'rd_oauth_pending']).then((data) => {
     const contextMenuEnabled = data.rd_context_menu !== false;
     const notificationsEnabled = data.rd_notifications_enabled !== false;
     const hoverLiftEnabled = data.rd_hover_lift !== false;
@@ -1425,7 +1420,6 @@ function showAuthModal(autoStartOauth = false) {
     const cachedUser = data.rd_cached_user;
     const userPoints = cachedUser?.points != null ? cachedUser.points.toLocaleString() : '—';
     const username = cachedUser?.username || cachedUser?.email || '—';
-    const currentMaxHeight = data.rd_max_height || 400;
 
     const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
 
@@ -1499,15 +1493,6 @@ function showAuthModal(autoStartOauth = false) {
           )
         )
       ),
-      el('div', {className: 'form-group'},
-        el('label', {className: 'form-label', style: 'margin-bottom:6px;'},
-          el('span', {style: 'display:inline-flex;align-items:center;gap:5px;'}, 'Altura máxima ',
-            el('span', {className: 'slider-value-inline', id: 'max-height-value'}, currentMaxHeight + 'px'),
-            el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Ajusta a altura da janela.'))
-          )
-        ),
-        el('input', {type: 'range', id: 'input-max-height', className: 'settings-slider', min: '400', max: '600', step: '10', value: String(currentMaxHeight)})
-      ),
       el('div', {className: 'settings-account-section', id: 'settings-account-area'}, authSection)
     );
 
@@ -1529,14 +1514,6 @@ function showAuthModal(autoStartOauth = false) {
       useJDownloader = e.target.checked;
       browser.storage.local.set({ rd_use_jdownloader: useJDownloader });
     });
-
-    const maxHeightSlider = $('#input-max-height');
-    const maxHeightLabel = $('#max-height-value');
-    maxHeightSlider.addEventListener('input', (e) => {
-      maxHeightLabel.textContent = e.target.value + 'px';
-      applyMaxHeight(parseInt(e.target.value));
-    });
-    maxHeightSlider.addEventListener('change', (e) => browser.storage.local.set({ rd_max_height: parseInt(e.target.value) }));
 
     const startOauthBtn = $('#btn-start-oauth');
     if (startOauthBtn) {
@@ -1595,7 +1572,7 @@ function renderOAuthPending(data) {
   container.replaceChildren(
     el('div', {style: 'text-align:center; padding: 10px;'},
       el('h4', {style: 'margin-bottom: 5px;'}, 'Acesse a URL e insira o código:'),
-      el('a', {href: data.verification_url, target: '_blank', style: 'color: #1a9c4a; font-weight: bold; font-size: 16px;'}, data.verification_url),
+      el('a', {href: data.verification_url, target: '_blank', style: 'color: var(--accent); font-weight: bold; font-size: 16px;'}, data.verification_url),
       el('div', {style: 'font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 15px 0; user-select: all;'}, data.user_code),
       el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px; margin-bottom: 10px;'}, 'Aguardando autorização...'),
       el('button', {id: 'btn-cancel-oauth', className: 'action-btn ghost', style: 'color: #f46878; margin: 0 auto;'}, 'Cancelar')
