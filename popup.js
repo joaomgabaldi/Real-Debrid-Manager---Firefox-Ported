@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadCachedStorageValues();
   bindEvents();
   const token = await getValidToken();
+  
   if (token) {
     hasValidToken = true;
     await loadCachedData();
@@ -49,6 +50,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     fetchUserInfo();
   } else {
     showState('no-api');
+    
+    // Verifica se existe uma autenticação pendente ao abrir a extensão
+    const data = await browser.storage.local.get('rd_oauth_pending');
+    if (data.rd_oauth_pending && data.rd_oauth_pending.expires_at > Date.now()) {
+      const btn = $('#btn-login-api');
+      if (btn) btn.textContent = 'Verificando autorização...';
+      
+      pollDeviceCredentials(data.rd_oauth_pending.device_code);
+      oauthPollingInterval = setInterval(() => pollDeviceCredentials(data.rd_oauth_pending.device_code), 5000);
+    } else if (data.rd_oauth_pending) {
+      browser.storage.local.remove('rd_oauth_pending');
+    }
   }
 });
 
@@ -610,6 +623,9 @@ async function forceLogout(msg = 'Acesso revogado ou expirado. Por favor, recone
   
   const tile = $('#header-plan-tile');
   if (tile) tile.style.display = 'none';
+  
+  const btn = $('#btn-login-api');
+  if (btn) btn.textContent = 'Conectar ao Real-Debrid';
   
   closeModal(true);
   showState('no-api');
@@ -1582,6 +1598,8 @@ function renderOAuthPending(data) {
   $('#btn-cancel-oauth').addEventListener('click', async () => {
     if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
     await browser.storage.local.remove('rd_oauth_pending');
+    const btn = $('#btn-login-api');
+    if (btn) btn.textContent = 'Conectar ao Real-Debrid';
     showAuthModal(false);
   });
 
@@ -1606,6 +1624,8 @@ async function pollDeviceCredentials(deviceCode) {
     const statusEl = $('#oauth-status');
     if (statusEl) statusEl.textContent = 'Erro ou expirado. Cancele e tente novamente.';
     await browser.storage.local.remove('rd_oauth_pending');
+    const btn = $('#btn-login-api');
+    if (btn) btn.textContent = 'Conectar ao Real-Debrid';
   }
 }
 
@@ -1636,6 +1656,8 @@ async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
         rd_token_expires_at: expiry
       });
       await browser.storage.local.remove('rd_oauth_pending');
+      const btn = $('#btn-login-api');
+      if (btn) btn.textContent = 'Conectar ao Real-Debrid';
       hasValidToken = true;
       toast('Login concluído!', 'success');
       closeModal();
