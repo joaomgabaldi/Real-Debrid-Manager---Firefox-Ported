@@ -1,4 +1,6 @@
 const API_BASE = 'https://api.real-debrid.com/rest/1.0';
+const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
+const OPENSOURCE_CLIENT_ID = 'X245A4XAIBGVM';
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -14,7 +16,7 @@ function el(tag, attrs = {}, ...children) {
   return e;
 }
 
-let apiKey = '';
+let hasValidToken = false;
 let currentTab = 'all';
 let currentTypeFilter = null;
 let searchQuery = '';
@@ -28,6 +30,7 @@ let useJDownloader = false;
 
 let currentlyLockedTorrentId = null;
 let ignoreAutoLockIds = new Set();
+let oauthPollingInterval = null;
 
 const dlElementMap = new Map();
 const $ = (sel) => document.querySelector(sel);
@@ -37,7 +40,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await loadCachedStorageValues();
   bindEvents();
-  if (apiKey) {
+  const token = await getValidToken();
+  if (token) {
+    hasValidToken = true;
     await loadCachedData();
     await loadLocalNotifications();
     refreshInBackground();
@@ -162,8 +167,7 @@ function enforceSelectionLock() {
 }
 
 async function loadSettings() {
-  return browser.storage.local.get(['rd_api_key', 'rd_theme', 'rd_hover_lift', 'rd_accent_color', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
-    apiKey = data.rd_api_key || '';
+  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_accent_color', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
     const theme = data.rd_theme || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
@@ -176,11 +180,6 @@ async function loadSettings() {
 
 function applyMaxHeight(px) {
   document.body.style.maxHeight = px + 'px';
-}
-
-function saveApiKey(key) {
-  apiKey = key;
-  browser.storage.local.set({ rd_api_key: key });
 }
 
 function saveTheme(theme) {
@@ -259,8 +258,8 @@ function bindEvents() {
     browser.tabs.create({ url: 'https://real-debrid.com/torrents', active: true });
   });
 
-  $('#btn-settings').addEventListener('click', showApiKeyModal);
-  $('#btn-setup-api').addEventListener('click', showApiKeyModal);
+  $('#btn-settings').addEventListener('click', showAuthModal);
+  $('#btn-login-api').addEventListener('click', showAuthModal);
   $('#btn-notifications').addEventListener('click', showNotificationsModal);
   $('#btn-add-torrent').addEventListener('click', showTorrentModal);
   $('#btn-add-webdl').addEventListener('click', showWebLinkModal);
@@ -309,7 +308,7 @@ function bindEvents() {
 
   const deleteAllBtn = $('#btn-delete-all');
   deleteAllBtn.addEventListener('mousedown', () => {
-    if (!apiKey || allDownloads.length === 0) return;
+    if (!hasValidToken || allDownloads.length === 0) return;
     deleteAllBtn.classList.remove('no-transition');
     deleteAllBtn.classList.add('holding');
     deleteAllHoldTimer = setTimeout(() => {
@@ -646,7 +645,6 @@ async function triggerDownload(url, filename = '') {
 }
 
 const TIMEOUT_DEFAULT_MS  = 10_000;
-const TIMEOUT_VALIDATE_MS = 10_000;
 const TIMEOUT_DOWNLOAD_MS = 10_000;
 
 function fetchWithTimeout(url, options = {}, timeoutMs) {
@@ -656,8 +654,46 @@ function fetchWithTimeout(url, options = {}, timeoutMs) {
     .finally(() => clearTimeout(timer));
 }
 
+async function getValidToken() {
+  const data = await browser.storage.local.get(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at']);
+  if (!data.rd_access_token) return null;
+
+  if (Date.now() > data.rd_token_expires_at - 60000) {
+    try {
+      const res = await fetch(`${OAUTH_BASE}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: data.rd_oauth_client_id,
+          client_secret: data.rd_oauth_client_secret,
+          code: data.rd_refresh_token,
+          grant_type: 'http://oauth.net/grant_type/device/1.0'
+        }).toString()
+      });
+      if (!res.ok) {
+        hasValidToken = false;
+        return null;
+      }
+      const tokenData = await res.json();
+      const newExpiry = Date.now() + (tokenData.expires_in * 1000);
+      await browser.storage.local.set({
+        rd_access_token: tokenData.access_token,
+        rd_refresh_token: tokenData.refresh_token,
+        rd_token_expires_at: newExpiry
+      });
+      hasValidToken = true;
+      return tokenData.access_token;
+    } catch (_) {
+      return null;
+    }
+  }
+  return data.rd_access_token;
+}
+
 async function apiGet(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, { headers: { Authorization: `Bearer ${apiKey}` } }, timeoutMs);
+  const token = await getValidToken();
+  if (!token) throw new Error('Unauthenticated');
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, { headers: { Authorization: `Bearer ${token}` } }, timeoutMs);
   if (!res.ok) {
     if (res.status === 404) return null;
     throw new Error(`API error (${res.status})`);
@@ -669,7 +705,9 @@ async function apiGet(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
 }
 
 async function apiPost(path, body, isForm = false, timeoutMs = null) {
-  const headers = { Authorization: `Bearer ${apiKey}` };
+  const token = await getValidToken();
+  if (!token) throw new Error('Unauthenticated');
+  const headers = { Authorization: `Bearer ${token}` };
   let fetchBody;
 
   if (isForm) fetchBody = body;
@@ -689,13 +727,16 @@ async function apiPost(path, body, isForm = false, timeoutMs = null) {
 }
 
 async function apiDelete(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, { method: 'DELETE', headers: { Authorization: `Bearer ${apiKey}` } }, timeoutMs);
+  const token = await getValidToken();
+  if (!token) throw new Error('Unauthenticated');
+  const res = await fetchWithTimeout(`${API_BASE}${path}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }, timeoutMs);
   if (!res.ok && res.status !== 204) throw new Error(`API error (${res.status})`);
   return null;
 }
 
 async function fetchAll(isBackgroundSync = false) {
-  if (!apiKey) return showState('no-api');
+  const token = await getValidToken();
+  if (!token) return showState('no-api');
   if (allDownloads.length === 0) showState('loading');
 
   try {
@@ -774,7 +815,6 @@ async function fetchAll(isBackgroundSync = false) {
       });
     }
 
-    // Limpa a lista de locks ignorados mantendo apenas os IDs que ainda existem nos downloads ativos
     let changedLocks = false;
     const currentIds = new Set(allDownloads.map(d => String(d.id)));
     for (const id of ignoreAutoLockIds) {
@@ -889,7 +929,8 @@ function mapRdStatus(status) {
 }
 
 async function fetchUserInfo() {
-  if (!apiKey) return;
+  const token = await getValidToken();
+  if (!token) return;
   try {
     const res = await apiGet('/user');
     if (res) {
@@ -1381,13 +1422,14 @@ function initFixedTooltips() {
 function closeModal(force = false) {
   const overlay = $('#modal-overlay');
   if (!force && overlay.dataset.locked === 'true') return;
+  if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
   overlay.classList.add('hidden');
   overlay.dataset.locked = 'false';
   $('#modal-close').style.display = '';
   if (force) currentlyLockedTorrentId = null;
 }
 
-function showApiKeyModal() {
+function showAuthModal() {
   browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_accent_color', 'rd_cached_user', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
     const contextMenuEnabled = data.rd_context_menu !== false;
     const notificationsEnabled = data.rd_notifications_enabled !== false;
@@ -1401,6 +1443,22 @@ function showApiKeyModal() {
     const defaultColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#52c47e' : '#1a9c4a';
 
     const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
+
+    let authSection;
+    if (hasValidToken) {
+      authSection = el('div', {className: 'settings-account-footer'},
+        el('div', {className: 'settings-account-left'},
+          makeSvg([['path',{d:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}],['circle',{cx:'12',cy:'7',r:'4'}]]),
+          el('span', {className: 'settings-account-name'}, username)
+        ),
+        el('span', {className: 'settings-account-points'}, userPoints + ' Pontos de Fidelidade'),
+        el('button', {id: 'btn-logout', className: 'action-btn ghost', style: 'color: #f46878; margin-left: auto;'}, 'Sair')
+      );
+    } else {
+      authSection = el('div', {style: 'text-align:center; padding: 10px;'},
+        el('button', {id: 'btn-start-oauth', className: 'action-btn primary'}, 'Conectar com Real-Debrid')
+      );
+    }
 
     const body = el('div', {},
       el('div', {className: 'form-group'},
@@ -1474,22 +1532,7 @@ function showApiKeyModal() {
           )
         )
       ),
-      el('div', {className: 'settings-account-section'},
-        el('div', {className: 'form-group', style: 'margin-bottom:10px;'},
-          el('label', {className: 'form-label'}, 'Token da API ', el('span', {className: 'form-label-normal'}, '(do ', el('a', {href: 'https://real-debrid.com/apitoken', target: '_blank', className: 'form-label-link'}, 'Real-Debrid'), ')')),
-          el('div', {className: 'api-key-row'},
-            el('input', {type: 'password', className: 'form-input', id: 'input-api-key', value: apiKey, placeholder: 'Cole seu token de API do Real-Debrid', spellcheck: 'false'}),
-            el('button', {className: 'api-key-save', id: 'save-api-key', disabled: 'disabled', title: 'Edite o token para salvar'}, 'Salvar')
-          )
-        ),
-        el('div', {className: 'settings-account-footer'},
-          el('div', {className: 'settings-account-left'},
-            makeSvg([['path',{d:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}],['circle',{cx:'12',cy:'7',r:'4'}]]),
-            el('span', {className: 'settings-account-name'}, username)
-          ),
-          el('span', {className: 'settings-account-points'}, userPoints + ' Pontos de Fidelidade')
-        )
-      )
+      el('div', {className: 'settings-account-section', id: 'settings-account-area'}, authSection)
     );
 
     openModalWithNode('Configurações', body);
@@ -1527,62 +1570,98 @@ function showApiKeyModal() {
       $('#input-accent-color').value = defaultColor;
     });
 
-    const apiKeyInput = $('#input-api-key');
-    const saveBtn = $('#save-api-key');
-    const savedKey = apiKey;
-
-    apiKeyInput.addEventListener('input', () => {
-      const changed = apiKeyInput.value.trim() !== savedKey;
-      saveBtn.disabled = !changed;
-      saveBtn.title = changed ? '' : 'Edite o token para salvar';
-    });
-
-    saveBtn.addEventListener('click', async () => {
-      const key = apiKeyInput.value.trim();
-      if (!key) return toast('Por favor, insira uma chave válida', 'error');
-
-      saveBtn.disabled = true;
-      saveBtn.classList.add('loading');
-      saveBtn.textContent = '...';
-
-      try {
-        const res = await fetchWithTimeout(`${API_BASE}/user`, { headers: { Authorization: `Bearer ${key}` } }, TIMEOUT_VALIDATE_MS);
-        if (!res.ok) throw new Error(`API error (${res.status})`);
-        const data = await res.json();
-        if (!data?.id) throw new Error('Invalid response');
-
-        saveApiKey(key);
-        saveBtn.textContent = '✓';
-        toast('Token da API salvo!', 'success');
-        showUserBar(data);
-        browser.storage.local.set({ rd_cached_user: data });
-
-        const nameEl = document.querySelector('.settings-account-name');
-        const pointsEl = document.querySelector('.settings-account-points');
-        if (nameEl) nameEl.textContent = data.username || data.email || '—';
-        if (pointsEl) pointsEl.textContent = (data.points != null ? data.points.toLocaleString() : '—') + ' Pontos de Fidelidade';
-
-        fetchAll();
-        fetchUserInfo();
-      } catch (err) {
-        toast(err.name === 'AbortError' ? 'A validação expirou' : 'Token de API inválido', 'error');
-        saveBtn.disabled = false;
-        saveBtn.classList.remove('loading');
-        saveBtn.textContent = 'Salvar';
-      }
-    });
-
-    apiKeyInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !saveBtn.disabled) saveBtn.click();
-    });
-
-    if (!apiKey) {
-      setTimeout(() => {
-        apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        apiKeyInput.focus();
-      }, 100);
+    const startOauthBtn = $('#btn-start-oauth');
+    if (startOauthBtn) {
+      startOauthBtn.addEventListener('click', startOAuthFlow);
+    }
+    const logoutBtn = $('#btn-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', async () => {
+        hasValidToken = false;
+        await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at', 'rd_cached_user', 'rd_cached_downloads']);
+        closeModal();
+        showState('no-api');
+      });
     }
   });
+}
+
+async function startOAuthFlow() {
+  const container = $('#settings-account-area');
+  container.replaceChildren(el('div', {style: 'text-align:center; padding:10px;'}, el('div', {className: 'spinner'}), ' Solicitando código...'));
+  
+  try {
+    const res = await fetch(`${OAUTH_BASE}/device/code?client_id=${OPENSOURCE_CLIENT_ID}&new_credentials=yes`);
+    const data = await res.json();
+    
+    if (!data.device_code) throw new Error('No device code received');
+
+    container.replaceChildren(
+      el('div', {style: 'text-align:center; padding: 10px;'},
+        el('h4', {style: 'margin-bottom: 5px;'}, 'Acesse a URL e insira o código:'),
+        el('a', {href: data.verification_url, target: '_blank', style: 'color: var(--accent); font-weight: bold; font-size: 16px;'}, data.verification_url),
+        el('div', {style: 'font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 15px 0; user-select: all;'}, data.user_code),
+        el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px;'}, 'Aguardando autorização...')
+      )
+    );
+
+    oauthPollingInterval = setInterval(() => pollDeviceCredentials(data.device_code), 5000);
+  } catch (err) {
+    container.replaceChildren(el('div', {style: 'color: #f46878;'}, 'Erro ao iniciar autenticação.'));
+  }
+}
+
+async function pollDeviceCredentials(deviceCode) {
+  try {
+    const res = await fetch(`${OAUTH_BASE}/device/credentials?client_id=${OPENSOURCE_CLIENT_ID}&code=${deviceCode}`);
+    if (res.status === 403) return; // Pending
+    if (!res.ok) throw new Error('Polling failed');
+    
+    const creds = await res.json();
+    if (creds.client_id && creds.client_secret) {
+      clearInterval(oauthPollingInterval);
+      oauthPollingInterval = null;
+      await exchangeDeviceToken(creds.client_id, creds.client_secret, deviceCode);
+    }
+  } catch (err) {
+    clearInterval(oauthPollingInterval);
+    $('#oauth-status').textContent = 'Erro ao autorizar. Tente novamente.';
+  }
+}
+
+async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
+  try {
+    $('#oauth-status').textContent = 'Finalizando login...';
+    const res = await fetch(`${OAUTH_BASE}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: deviceCode,
+        grant_type: 'http://oauth.net/grant_type/device/1.0'
+      }).toString()
+    });
+    
+    const tokenData = await res.json();
+    if (tokenData.access_token) {
+      const expiry = Date.now() + (tokenData.expires_in * 1000);
+      await browser.storage.local.set({
+        rd_access_token: tokenData.access_token,
+        rd_refresh_token: tokenData.refresh_token,
+        rd_oauth_client_id: clientId,
+        rd_oauth_client_secret: clientSecret,
+        rd_token_expires_at: expiry
+      });
+      hasValidToken = true;
+      toast('Login concluído!', 'success');
+      closeModal();
+      fetchAll();
+      fetchUserInfo();
+    }
+  } catch (err) {
+    $('#oauth-status').textContent = 'Falha ao trocar token.';
+  }
 }
 
 async function openFileSelectionModal(torrentId) {
@@ -1724,7 +1803,7 @@ async function openFileSelectionModal(torrentId) {
 }
 
 function showTorrentModal() {
-  if (!apiKey) return showApiKeyModal();
+  if (!hasValidToken) return showAuthModal();
 
   const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
   const btnSvg = makeSvg([['path',{d:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}],['polyline',{points:'14 2 14 8 20 8'}]]);
@@ -1789,9 +1868,10 @@ function showTorrentModal() {
     try {
       let torrentId = null;
       if (file) {
+        const token = await getValidToken();
         const res = await fetch(`${API_BASE}/torrents/addTorrent`, {
           method: 'PUT',
-          headers: { Authorization: `Bearer ${apiKey}` },
+          headers: { Authorization: `Bearer ${token}` },
           body: file
         });
         if (!res.ok) throw new Error(`API error (${res.status})`);
@@ -1827,7 +1907,7 @@ function showTorrentModal() {
 }
 
 function showWebLinkModal() {
-  if (!apiKey) return showApiKeyModal();
+  if (!hasValidToken) return showAuthModal();
 
   const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
   const compareSvg = makeSvg([['path',{d:'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'}],['polyline',{points:'15 3 21 3 21 9'}],['line',{x1:'10',y1:'14',x2:'21',y2:'3'}]]);
