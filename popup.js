@@ -26,6 +26,9 @@ let currentFiltered = [];
 let cachedNotificationsEnabled = true;
 let useJDownloader = false;
 
+let currentlyLockedTorrentId = null;
+let ignoreAutoLockIds = new Set();
+
 const dlElementMap = new Map();
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -67,6 +70,7 @@ async function loadCachedData() {
     if (data.rd_cached_downloads && data.rd_cached_downloads.length > 0) {
       allDownloads = data.rd_cached_downloads;
       renderDownloads();
+      enforceSelectionLock();
     }
     if (data.rd_cached_user) {
       showUserBar(data.rd_cached_user);
@@ -140,6 +144,13 @@ function scheduleNextRefresh() {
     if (allDownloads.some(d => !isCompleted(d))) scheduleNextRefresh();
     else stopAutoRefresh();
   }, delay);
+}
+
+function enforceSelectionLock() {
+  const pending = allDownloads.find(d => d.download_state === 'waiting_selection' && !ignoreAutoLockIds.has(String(d.id)));
+  if (pending && !currentlyLockedTorrentId) {
+    openFileSelectionModal(pending.id);
+  }
 }
 
 async function loadSettings() {
@@ -763,6 +774,8 @@ async function fetchAll(isBackgroundSync = false) {
     preloadTorrentFiles();
     await updateBellFromDownloads(allDownloads);
 
+    enforceSelectionLock();
+
     if (allDownloads.some(d => !isCompleted(d))) startAutoRefresh();
     else stopAutoRefresh();
 
@@ -1350,6 +1363,7 @@ function closeModal(force = false) {
   overlay.classList.add('hidden');
   overlay.dataset.locked = 'false';
   $('#modal-close').style.display = '';
+  if (force) currentlyLockedTorrentId = null;
 }
 
 function showApiKeyModal() {
@@ -1551,6 +1565,7 @@ function showApiKeyModal() {
 }
 
 async function openFileSelectionModal(torrentId) {
+  currentlyLockedTorrentId = String(torrentId);
   let isCancelled = false;
 
   const handleCancel = async (btn) => {
@@ -1566,7 +1581,7 @@ async function openFileSelectionModal(torrentId) {
     fetchAll();
   };
 
-  const cancelLoadingBtn = el('button', {className: 'action-btn ghost', style: 'margin-top: 15px; width: 100%; justify-content: center;'}, 'Cancelar Torrent');
+  const cancelLoadingBtn = el('button', {className: 'action-btn', style: 'margin-top: 15px; width: 100%; justify-content: center; background-color: #f46878; color: white; border: none;'}, 'Cancelar Torrent');
   cancelLoadingBtn.addEventListener('click', () => handleCancel(cancelLoadingBtn));
 
   const modalBody = el('div', {className: 'state-message', style: 'padding: 20px 0;'},
@@ -1581,8 +1596,10 @@ async function openFileSelectionModal(torrentId) {
   let attempts = 0;
   while (attempts < 30) {
     if (isCancelled) return;
-    info = await apiGet(`/torrents/info/${torrentId}`);
-    if (info && info.status !== 'magnet_conversion') break;
+    try {
+      info = await apiGet(`/torrents/info/${torrentId}`);
+      if (info && info.status !== 'magnet_conversion') break;
+    } catch (e) {}
     await new Promise(r => setTimeout(r, 1000));
     attempts++;
   }
@@ -1591,12 +1608,14 @@ async function openFileSelectionModal(torrentId) {
 
   if (!info || info.status === 'error' || info.status === 'dead') {
     toast('Erro ao obter arquivos do torrent', 'error');
+    ignoreAutoLockIds.add(String(torrentId));
     closeModal(true);
     return;
   }
 
   if (!info.files || info.files.length === 0) {
     toast('Nenhum arquivo encontrado para seleção', 'error');
+    ignoreAutoLockIds.add(String(torrentId));
     closeModal(true);
     return;
   }
@@ -1626,7 +1645,7 @@ async function openFileSelectionModal(torrentId) {
     checkboxes.forEach(c => c.checked = !allChecked);
   });
 
-  const cancelBtn = el('button', {className: 'action-btn ghost', style: 'flex: 1; margin-right: 5px; justify-content: center;'}, 'Cancelar');
+  const cancelBtn = el('button', {className: 'action-btn', style: 'flex: 1; margin-right: 5px; justify-content: center; background-color: #f46878; color: white; border: none;'}, 'Cancelar');
   const confirmBtn = el('button', {className: 'form-submit', style: 'flex: 1; margin-left: 5px;'}, 'Iniciar Download');
 
   cancelBtn.addEventListener('click', () => {
@@ -1823,7 +1842,7 @@ function showWebLinkModal() {
         closeModal();
         fetchAll();
       } else if (succeeded.length === 0) {
-        toast('Falha em todos links', 'error');
+        toast('Falha em todos os links', 'error');
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading');
         submitBtn.replaceChildren('Desbloquear', el('span', {className: 'btn-spinner'}));
