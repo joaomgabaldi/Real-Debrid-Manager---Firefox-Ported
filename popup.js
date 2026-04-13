@@ -1,10 +1,5 @@
-/* ============================================
-   RD Manager — Firefox Extension Logic
-   ============================================ */
-
 const API_BASE = 'https://api.real-debrid.com/rest/1.0';
 
-// ---- DOM Helper (Replaces innerHTML completely) ----
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -19,7 +14,6 @@ function el(tag, attrs = {}, ...children) {
   return e;
 }
 
-// ---- State ----
 let apiKey = '';
 let currentTab = 'all';
 let currentTypeFilter = null;
@@ -36,7 +30,6 @@ const dlElementMap = new Map();
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-// ---- Init ----
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await loadCachedStorageValues();
@@ -53,7 +46,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.addEventListener('pagehide', () => stopAutoRefresh());
 
-// ---- Cached storage sync ----
 async function loadCachedStorageValues() {
   return browser.storage.local.get(['rd_notifications_enabled']).then((data) => {
     cachedNotificationsEnabled = data.rd_notifications_enabled !== false;
@@ -70,7 +62,6 @@ browser.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// ---- Cache Management ----
 async function loadCachedData() {
   return browser.storage.local.get(['rd_cached_downloads', 'rd_cached_user']).then((data) => {
     if (data.rd_cached_downloads && data.rd_cached_downloads.length > 0) {
@@ -102,7 +93,6 @@ function refreshInBackground() {
   });
 }
 
-// ---- Polling Decay Logic ----
 let autoRefreshTimer = null;
 let refreshDecayCount = 0;
 const BASE_REFRESH_MS = 5000;
@@ -147,7 +137,6 @@ function scheduleNextRefresh() {
   }, delay);
 }
 
-// ---- Settings ----
 async function loadSettings() {
   return browser.storage.local.get(['rd_api_key', 'rd_theme', 'rd_hover_lift', 'rd_accent_color', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
     apiKey = data.rd_api_key || '';
@@ -181,7 +170,6 @@ async function trackId(id) {
   await browser.storage.local.set({ rd_tracked_ids: [...tracked] });
 }
 
-// ---- Accent color customisation ----
 function hexToRgb(hex) {
   const n = parseInt(hex.replace('#', ''), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -229,7 +217,6 @@ function clearAccentColor() {
   ['--accent', '--accent-hover', '--accent-dim', '--accent-scroll', '--accent-scroll-hover', '--accent-text', '--border-focus'].forEach(p => root.style.removeProperty(p));
 }
 
-// ---- Events ----
 let deleteAllHoldTimer = null;
 
 function bindEvents() {
