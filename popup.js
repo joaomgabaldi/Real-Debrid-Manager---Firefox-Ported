@@ -1430,7 +1430,7 @@ function closeModal(force = false) {
 }
 
 function showAuthModal() {
-  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_accent_color', 'rd_cached_user', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
+  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_accent_color', 'rd_cached_user', 'rd_max_height', 'rd_use_jdownloader', 'rd_oauth_pending']).then((data) => {
     const contextMenuEnabled = data.rd_context_menu !== false;
     const notificationsEnabled = data.rd_notifications_enabled !== false;
     const hoverLiftEnabled = data.rd_hover_lift !== false;
@@ -1574,11 +1574,20 @@ function showAuthModal() {
     if (startOauthBtn) {
       startOauthBtn.addEventListener('click', startOAuthFlow);
     }
+
+    if (!hasValidToken && data.rd_oauth_pending) {
+      if (data.rd_oauth_pending.expires_at > Date.now()) {
+        renderOAuthPending(data.rd_oauth_pending);
+      } else {
+        browser.storage.local.remove('rd_oauth_pending');
+      }
+    }
+
     const logoutBtn = $('#btn-logout');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', async () => {
         hasValidToken = false;
-        await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at', 'rd_cached_user', 'rd_cached_downloads']);
+        await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at', 'rd_cached_user', 'rd_cached_downloads', 'rd_oauth_pending']);
         closeModal();
         showState('no-api');
       });
@@ -1596,42 +1605,70 @@ async function startOAuthFlow() {
     
     if (!data.device_code) throw new Error('No device code received');
 
-    container.replaceChildren(
-      el('div', {style: 'text-align:center; padding: 10px;'},
-        el('h4', {style: 'margin-bottom: 5px;'}, 'Acesse a URL e insira o código:'),
-        el('a', {href: data.verification_url, target: '_blank', style: 'color: var(--accent); font-weight: bold; font-size: 16px;'}, data.verification_url),
-        el('div', {style: 'font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 15px 0; user-select: all;'}, data.user_code),
-        el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px;'}, 'Aguardando autorização...')
-      )
-    );
-
-    oauthPollingInterval = setInterval(() => pollDeviceCredentials(data.device_code), 5000);
+    const pendingData = {
+      device_code: data.device_code,
+      user_code: data.user_code,
+      verification_url: data.verification_url,
+      expires_at: Date.now() + (data.expires_in * 1000)
+    };
+    
+    await browser.storage.local.set({ rd_oauth_pending: pendingData });
+    renderOAuthPending(pendingData);
   } catch (err) {
     container.replaceChildren(el('div', {style: 'color: #f46878;'}, 'Erro ao iniciar autenticação.'));
+    setTimeout(showAuthModal, 2000);
   }
+}
+
+function renderOAuthPending(data) {
+  const container = $('#settings-account-area');
+  if (!container) return;
+
+  container.replaceChildren(
+    el('div', {style: 'text-align:center; padding: 10px;'},
+      el('h4', {style: 'margin-bottom: 5px;'}, 'Acesse a URL e insira o código:'),
+      el('a', {href: data.verification_url, target: '_blank', style: 'color: var(--accent); font-weight: bold; font-size: 16px;'}, data.verification_url),
+      el('div', {style: 'font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 15px 0; user-select: all;'}, data.user_code),
+      el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px; margin-bottom: 10px;'}, 'Aguardando autorização...'),
+      el('button', {id: 'btn-cancel-oauth', className: 'action-btn ghost', style: 'color: #f46878; margin: 0 auto;'}, 'Cancelar')
+    )
+  );
+
+  $('#btn-cancel-oauth').addEventListener('click', async () => {
+    if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
+    await browser.storage.local.remove('rd_oauth_pending');
+    showAuthModal();
+  });
+
+  if (oauthPollingInterval) clearInterval(oauthPollingInterval);
+  pollDeviceCredentials(data.device_code);
+  oauthPollingInterval = setInterval(() => pollDeviceCredentials(data.device_code), 5000);
 }
 
 async function pollDeviceCredentials(deviceCode) {
   try {
     const res = await fetch(`${OAUTH_BASE}/device/credentials?client_id=${OPENSOURCE_CLIENT_ID}&code=${deviceCode}`);
-    if (res.status === 403) return; // Pending
+    if (res.status === 403) return; 
     if (!res.ok) throw new Error('Polling failed');
     
     const creds = await res.json();
     if (creds.client_id && creds.client_secret) {
-      clearInterval(oauthPollingInterval);
-      oauthPollingInterval = null;
+      if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
       await exchangeDeviceToken(creds.client_id, creds.client_secret, deviceCode);
     }
   } catch (err) {
-    clearInterval(oauthPollingInterval);
-    $('#oauth-status').textContent = 'Erro ao autorizar. Tente novamente.';
+    if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
+    const statusEl = $('#oauth-status');
+    if (statusEl) statusEl.textContent = 'Erro ou expirado. Cancele e tente novamente.';
+    await browser.storage.local.remove('rd_oauth_pending');
   }
 }
 
 async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
   try {
-    $('#oauth-status').textContent = 'Finalizando login...';
+    const statusEl = $('#oauth-status');
+    if (statusEl) statusEl.textContent = 'Finalizando login...';
+    
     const res = await fetch(`${OAUTH_BASE}/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1653,6 +1690,7 @@ async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
         rd_oauth_client_secret: clientSecret,
         rd_token_expires_at: expiry
       });
+      await browser.storage.local.remove('rd_oauth_pending');
       hasValidToken = true;
       toast('Login concluído!', 'success');
       closeModal();
@@ -1660,7 +1698,8 @@ async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
       fetchUserInfo();
     }
   } catch (err) {
-    $('#oauth-status').textContent = 'Falha ao trocar token.';
+    const statusEl = $('#oauth-status');
+    if (statusEl) statusEl.textContent = 'Falha ao trocar token.';
   }
 }
 
