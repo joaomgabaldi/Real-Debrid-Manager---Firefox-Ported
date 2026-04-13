@@ -167,13 +167,12 @@ function enforceSelectionLock() {
 }
 
 async function loadSettings() {
-  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_accent_color', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
+  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_max_height', 'rd_use_jdownloader']).then((data) => {
     const theme = data.rd_theme || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
     document.documentElement.setAttribute('data-hover-lift', hoverLift);
     useJDownloader = data.rd_use_jdownloader === true;
-    if (data.rd_accent_color) applyAccentColor(data.rd_accent_color);
     applyMaxHeight(data.rd_max_height || 400);
   });
 }
@@ -193,53 +192,6 @@ async function trackId(id) {
   await browser.storage.local.set({ rd_tracked_ids: [...tracked] });
 }
 
-function hexToRgb(hex) {
-  const n = parseInt(hex.replace('#', ''), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-function luminance(r, g, b) {
-  const [rs, gs, bs] = [r, g, b].map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
-  return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
-}
-
-function darkenHex(hex, amount) {
-  const [r, g, b] = hexToRgb(hex);
-  const clamp = v => Math.max(0, Math.min(255, Math.round(v * (1 - amount))));
-  return `#${[clamp(r), clamp(g), clamp(b)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function lightenHex(hex, amount) {
-  const [r, g, b] = hexToRgb(hex);
-  const clamp = v => Math.max(0, Math.min(255, Math.round(v + (255 - v) * amount)));
-  return `#${[clamp(r), clamp(g), clamp(b)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function applyAccentColor(hex) {
-  if (!hex) return;
-  const [r, g, b] = hexToRgb(hex);
-  const lum = luminance(r, g, b);
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-
-  const hover = isDark ? lightenHex(hex, 0.15) : darkenHex(hex, 0.15);
-  const dimAlpha = isDark ? 0.13 : 0.12;
-  const textColor = lum > 0.4 ? '#101114' : '#ffffff';
-
-  const root = document.documentElement;
-  root.style.setProperty('--accent', hex);
-  root.style.setProperty('--accent-hover', hover);
-  root.style.setProperty('--accent-dim', `rgba(${r}, ${g}, ${b}, ${dimAlpha})`);
-  root.style.setProperty('--accent-scroll', `rgba(${r}, ${g}, ${b}, 0.45)`);
-  root.style.setProperty('--accent-scroll-hover', `rgba(${r}, ${g}, ${b}, 0.60)`);
-  root.style.setProperty('--accent-text', textColor);
-  root.style.setProperty('--border-focus', hex);
-}
-
-function clearAccentColor() {
-  const root = document.documentElement;
-  ['--accent', '--accent-hover', '--accent-dim', '--accent-scroll', '--accent-scroll-hover', '--accent-text', '--border-focus'].forEach(p => root.style.removeProperty(p));
-}
-
 let deleteAllHoldTimer = null;
 
 function bindEvents() {
@@ -249,9 +201,6 @@ function bindEvents() {
     const next = current === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     saveTheme(next);
-    browser.storage.local.get('rd_accent_color').then((data) => {
-      if (data.rd_accent_color) applyAccentColor(data.rd_accent_color);
-    });
   });
 
   $('.logo-icon').addEventListener('click', () => {
@@ -1468,17 +1417,15 @@ function closeModal(force = false) {
 
 function showAuthModal(autoStartOauth = false) {
   const autoStart = autoStartOauth === true;
-  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_accent_color', 'rd_cached_user', 'rd_max_height', 'rd_use_jdownloader', 'rd_oauth_pending']).then((data) => {
+  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_cached_user', 'rd_max_height', 'rd_use_jdownloader', 'rd_oauth_pending']).then((data) => {
     const contextMenuEnabled = data.rd_context_menu !== false;
     const notificationsEnabled = data.rd_notifications_enabled !== false;
     const hoverLiftEnabled = data.rd_hover_lift !== false;
     const jd2Enabled = data.rd_use_jdownloader === true;
-    const customAccent = data.rd_accent_color || '';
     const cachedUser = data.rd_cached_user;
     const userPoints = cachedUser?.points != null ? cachedUser.points.toLocaleString() : '—';
     const username = cachedUser?.username || cachedUser?.email || '—';
     const currentMaxHeight = data.rd_max_height || 400;
-    const defaultColor = document.documentElement.getAttribute('data-theme') === 'dark' ? '#52c47e' : '#1a9c4a';
 
     const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
 
@@ -1553,24 +1500,13 @@ function showAuthModal(autoStartOauth = false) {
         )
       ),
       el('div', {className: 'form-group'},
-        el('div', {className: 'settings-split-row'},
-          el('div', {className: 'settings-split-col'},
-            el('label', {className: 'form-label', style: 'margin-bottom:6px;'},
-              el('span', {style: 'display:inline-flex;align-items:center;gap:5px;'}, 'Altura máxima ',
-                el('span', {className: 'slider-value-inline', id: 'max-height-value'}, currentMaxHeight + 'px'),
-                el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Ajusta a altura da janela.'))
-              )
-            ),
-            el('input', {type: 'range', id: 'input-max-height', className: 'settings-slider', min: '400', max: '600', step: '10', value: String(currentMaxHeight)})
-          ),
-          el('div', {className: 'settings-split-col settings-split-right'},
-            el('label', {className: 'form-label', style: 'margin-bottom:6px;'}, 'Cor de destaque'),
-            el('div', {className: 'accent-picker-row'},
-              el('button', {id: 'btn-reset-accent', className: 'accent-reset-btn'}, 'Redefinir'),
-              el('input', {type: 'color', id: 'input-accent-color', className: 'accent-color-input small', value: customAccent || defaultColor})
-            )
+        el('label', {className: 'form-label', style: 'margin-bottom:6px;'},
+          el('span', {style: 'display:inline-flex;align-items:center;gap:5px;'}, 'Altura máxima ',
+            el('span', {className: 'slider-value-inline', id: 'max-height-value'}, currentMaxHeight + 'px'),
+            el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Ajusta a altura da janela.'))
           )
-        )
+        ),
+        el('input', {type: 'range', id: 'input-max-height', className: 'settings-slider', min: '400', max: '600', step: '10', value: String(currentMaxHeight)})
       ),
       el('div', {className: 'settings-account-section', id: 'settings-account-area'}, authSection)
     );
@@ -1601,14 +1537,6 @@ function showAuthModal(autoStartOauth = false) {
       applyMaxHeight(parseInt(e.target.value));
     });
     maxHeightSlider.addEventListener('change', (e) => browser.storage.local.set({ rd_max_height: parseInt(e.target.value) }));
-
-    $('#input-accent-color').addEventListener('input', (e) => applyAccentColor(e.target.value));
-    $('#input-accent-color').addEventListener('change', (e) => browser.storage.local.set({ rd_accent_color: e.target.value }));
-    $('#btn-reset-accent').addEventListener('click', () => {
-      browser.storage.local.remove('rd_accent_color');
-      clearAccentColor();
-      $('#input-accent-color').value = defaultColor;
-    });
 
     const startOauthBtn = $('#btn-start-oauth');
     if (startOauthBtn) {
@@ -1667,7 +1595,7 @@ function renderOAuthPending(data) {
   container.replaceChildren(
     el('div', {style: 'text-align:center; padding: 10px;'},
       el('h4', {style: 'margin-bottom: 5px;'}, 'Acesse a URL e insira o código:'),
-      el('a', {href: data.verification_url, target: '_blank', style: 'color: var(--accent); font-weight: bold; font-size: 16px;'}, data.verification_url),
+      el('a', {href: data.verification_url, target: '_blank', style: 'color: #1a9c4a; font-weight: bold; font-size: 16px;'}, data.verification_url),
       el('div', {style: 'font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 15px 0; user-select: all;'}, data.user_code),
       el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px; margin-bottom: 10px;'}, 'Aguardando autorização...'),
       el('button', {id: 'btn-cancel-oauth', className: 'action-btn ghost', style: 'color: #f46878; margin: 0 auto;'}, 'Cancelar')
@@ -2248,8 +2176,7 @@ async function updateNotificationBadge() {
     badge.textContent = count > 99 ? '99+' : count;
     badge.classList.remove('hidden');
     browser.action.setBadgeText({ text: count > 99 ? '99+' : String(count) });
-    const { rd_accent_color } = await browser.storage.local.get('rd_accent_color');
-    browser.action.setBadgeBackgroundColor({ color: rd_accent_color || '#1a9c4a' });
+    browser.action.setBadgeBackgroundColor({ color: '#1a9c4a' });
   } else {
     badge.classList.add('hidden');
     browser.action.setBadgeText({ text: '' });
