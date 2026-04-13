@@ -1,4 +1,5 @@
 const API_BASE = 'https://api.real-debrid.com/rest/1.0';
+const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
 const ALARM_NAME = 'rd-completion-check';
 const POLL_INTERVAL_MINUTES = 1;
 
@@ -49,15 +50,47 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 });
 
+async function getValidToken() {
+  const data = await browser.storage.local.get(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at']);
+  if (!data.rd_access_token) return null;
+
+  if (Date.now() > data.rd_token_expires_at - 60000) {
+    try {
+      const res = await fetch(`${OAUTH_BASE}/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: data.rd_oauth_client_id,
+          client_secret: data.rd_oauth_client_secret,
+          code: data.rd_refresh_token,
+          grant_type: 'http://oauth.net/grant_type/device/1.0'
+        }).toString()
+      });
+      if (!res.ok) return null;
+      const tokenData = await res.json();
+      const newExpiry = Date.now() + (tokenData.expires_in * 1000);
+      await browser.storage.local.set({
+        rd_access_token: tokenData.access_token,
+        rd_refresh_token: tokenData.refresh_token,
+        rd_token_expires_at: newExpiry
+      });
+      return tokenData.access_token;
+    } catch (_) {
+      return null;
+    }
+  }
+  return data.rd_access_token;
+}
+
 async function deleteTorrentsSequentially(ids) {
-  const { rd_api_key } = await browser.storage.local.get('rd_api_key');
-  if (!rd_api_key) return;
+  const token = await getValidToken();
+  if (!token) return;
 
   for (const id of ids) {
     try {
       await fetchWithTimeout(`${API_BASE}/torrents/delete/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${rd_api_key}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
     } catch (_) { /* best effort */ }
   }
@@ -70,16 +103,17 @@ browser.alarms.onAlarm.addListener((alarm) => {
 });
 
 async function checkForCompletedDownloads() {
-  const { rd_api_key, rd_notifications_enabled } = await browser.storage.local.get(['rd_api_key', 'rd_notifications_enabled']);
-  if (!rd_api_key) return;
-  if (rd_notifications_enabled === false) return;
+  const data = await browser.storage.local.get(['rd_notifications_enabled']);
+  if (data.rd_notifications_enabled === false) return;
+  const token = await getValidToken();
+  if (!token) return;
 
   try {
     const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
     const trackedIds = new Set(rd_tracked_ids || []);
     if (trackedIds.size === 0) return;
 
-    const torrents = await apiFetch(rd_api_key, '/torrents');
+    const torrents = await apiFetch(token, '/torrents');
     const current = [];
     if (Array.isArray(torrents)) {
       torrents.forEach(t => current.push({ id: String(t.id), name: t.filename, type: 'torrent', ready: isReady(t) }));
@@ -141,16 +175,16 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!isValid) { showBadge(false); return; }
   }
 
-  const { rd_api_key } = await browser.storage.local.get('rd_api_key');
-  if (!rd_api_key) { showBadge(false); return; }
+  const token = await getValidToken();
+  if (!token) { showBadge(false); return; }
 
   let workFn;
   if (url.startsWith('magnet:')) {
-    workFn = () => addMagnet(rd_api_key, url);
+    workFn = () => addMagnet(token, url);
   } else if (url.endsWith('.torrent') || url.includes('.torrent?')) {
-    workFn = () => addTorrentFile(rd_api_key, url);
+    workFn = () => addTorrentFile(token, url);
   } else {
-    workFn = () => unrestrictLink(rd_api_key, url);
+    workFn = () => unrestrictLink(token, url);
   }
 
   try {
@@ -163,10 +197,10 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-async function addMagnet(apiKey, magnet) {
+async function addMagnet(token, magnet) {
   const res = await fetch(`${API_BASE}/torrents/addMagnet`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `magnet=${encodeURIComponent(magnet)}`
   });
   if (!res.ok) throw new Error(`API error (${res.status})`);
@@ -176,13 +210,13 @@ async function addMagnet(apiKey, magnet) {
   }
 }
 
-async function addTorrentFile(apiKey, url) {
+async function addTorrentFile(token, url) {
   const fileRes = await fetch(url);
   if (!fileRes.ok) throw new Error('Failed to fetch .torrent file');
   const blob = await fileRes.blob();
   const res = await fetch(`${API_BASE}/torrents/addTorrent`, {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${apiKey}` },
+    headers: { Authorization: `Bearer ${token}` },
     body: blob
   });
   if (!res.ok) throw new Error(`API error (${res.status})`);
@@ -192,10 +226,10 @@ async function addTorrentFile(apiKey, url) {
   }
 }
 
-async function unrestrictLink(apiKey, link) {
+async function unrestrictLink(token, link) {
   const res = await fetch(`${API_BASE}/unrestrict/link`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `link=${encodeURIComponent(link)}`
   });
   if (!res.ok) throw new Error(`API error (${res.status})`);
@@ -243,9 +277,9 @@ function fetchWithTimeout(url, options = {}, timeoutMs = TIMEOUT_MS) {
     .finally(() => clearTimeout(timer));
 }
 
-async function apiFetch(apiKey, path) {
+async function apiFetch(token, path) {
   const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${apiKey}` }
+    headers: { Authorization: `Bearer ${token}` }
   });
   if (!res.ok) throw new Error(`API error (${res.status})`);
   return res.json();
