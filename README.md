@@ -46,4 +46,4 @@ Este projeto foi inspirado na extensão [Real-Debrid Lite](https://chromewebstor
 Este projeto está sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ---
-Desenvolvido por [João Marcos Gabaldi](https://github.com/joaomgabaldi)
+Desenvolvido com orgulho no 🇧🇷.
