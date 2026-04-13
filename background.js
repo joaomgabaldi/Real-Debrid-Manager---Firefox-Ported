@@ -66,7 +66,12 @@ async function getValidToken() {
           grant_type: 'http://oauth.net/grant_type/device/1.0'
         }).toString()
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403 || res.status === 400) {
+          await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
+        }
+        return null;
+      }
       const tokenData = await res.json();
       const newExpiry = Date.now() + (tokenData.expires_in * 1000);
       await browser.storage.local.set({
@@ -203,7 +208,10 @@ async function addMagnet(token, magnet) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `magnet=${encodeURIComponent(magnet)}`
   });
-  if (!res.ok) throw new Error(`API error (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
+    throw new Error(`API error (${res.status})`);
+  }
   const data = await res.json();
   if (data.id) {
     await trackId(String(data.id));
@@ -219,7 +227,10 @@ async function addTorrentFile(token, url) {
     headers: { Authorization: `Bearer ${token}` },
     body: blob
   });
-  if (!res.ok) throw new Error(`API error (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
+    throw new Error(`API error (${res.status})`);
+  }
   const data = await res.json();
   if (data.id) {
     await trackId(String(data.id));
@@ -232,7 +243,10 @@ async function unrestrictLink(token, link) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `link=${encodeURIComponent(link)}`
   });
-  if (!res.ok) throw new Error(`API error (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
+    throw new Error(`API error (${res.status})`);
+  }
   const data = await res.json();
   if (data.download) {
     const entry = {
@@ -281,7 +295,10 @@ async function apiFetch(token, path) {
   const res = await fetchWithTimeout(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
-  if (!res.ok) throw new Error(`API error (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
+    throw new Error(`API error (${res.status})`);
+  }
   return res.json();
 }
 
