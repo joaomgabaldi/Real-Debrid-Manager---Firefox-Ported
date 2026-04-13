@@ -51,7 +51,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     showState('no-api');
     
-    // Verifica se existe uma autenticação pendente ao abrir a extensão
     const data = await browser.storage.local.get('rd_oauth_pending');
     if (data.rd_oauth_pending && data.rd_oauth_pending.expires_at > Date.now()) {
       const btn = $('#btn-login-api');
@@ -218,7 +217,22 @@ function bindEvents() {
   $('#btn-settings').addEventListener('click', () => showAuthModal(false));
   $('#btn-login-api').addEventListener('click', () => showAuthModal(true));
   $('#btn-notifications').addEventListener('click', showNotificationsModal);
-  $('#btn-add-torrent').addEventListener('click', showTorrentModal);
+  
+  // MODIFICADO AQUI: Agora ele abre a janela nativa e destrói o popup
+  $('#btn-add-torrent').addEventListener('click', () => {
+    if (!hasValidToken) {
+      showAuthModal(true);
+      return;
+    }
+    browser.windows.create({
+      url: 'add.html',
+      type: 'popup',
+      width: 420,
+      height: 550
+    });
+    window.close(); // Fecha a extensão principal
+  });
+
   $('#btn-add-webdl').addEventListener('click', showWebLinkModal);
 
   $('#btn-refresh').addEventListener('click', () => {
@@ -1806,110 +1820,6 @@ async function openFileSelectionModal(torrentId) {
   if (modalTitle) modalTitle.textContent = 'Selecionar Arquivos';
   const mBody = document.getElementById('modal-body');
   if (mBody) mBody.replaceChildren(newBody);
-}
-
-function showTorrentModal() {
-  if (!hasValidToken) return showAuthModal(true);
-
-  const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
-  const btnSvg = makeSvg([['path',{d:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}],['polyline',{points:'14 2 14 8 20 8'}]]);
-
-  const body = el('div', {},
-    el('div', {className: 'form-group'},
-      el('div', {className: 'form-label-row'},
-        el('div', {className: 'form-label-left'},
-          el('label', {className: 'form-label'}, 'Link Magnet'),
-          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Cole um link magnet ou faça upload de um arquivo .torrent.'))
-        )
-      ),
-      el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'})
-    ),
-    el('div', {className: 'form-divider'}, el('span', {}, 'ou')),
-    el('div', {className: 'form-group'},
-      el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent', style: 'display:none'}),
-      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), 'Selecionar arquivo .torrent'),
-      el('div', {className: 'form-file-name', id: 'selected-file-name'})
-    ),
-    el('button', {className: 'form-submit', id: 'submit-torrent'}, 'Adicionar Torrent ', el('span', {className: 'btn-spinner'}))
-  );
-
-  openModalWithNode('Adicionar Torrent', body);
-
-  const magnetInput = $('#input-magnet');
-  const fileInput = $('#input-torrent-file');
-  const fileBtn = $('#btn-select-torrent');
-  const fileName = $('#selected-file-name');
-  const submitBtn = $('#submit-torrent');
-
-  fileBtn.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files.length > 0) {
-      fileName.textContent = fileInput.files[0].name;
-      magnetInput.value = '';
-      magnetInput.disabled = true;
-    } else {
-      fileName.textContent = '';
-      magnetInput.disabled = false;
-    }
-  });
-
-  magnetInput.addEventListener('input', () => {
-    if (magnetInput.value.trim()) {
-      fileInput.value = '';
-      fileName.textContent = '';
-    }
-  });
-
-  submitBtn.addEventListener('click', async () => {
-    const magnet = magnetInput.value.trim();
-    const file = fileInput.files[0];
-
-    if (!magnet && !file) return toast('Insira um link magnet ou selecione um arquivo', 'error');
-
-    submitBtn.disabled = true;
-    submitBtn.classList.add('loading');
-    submitBtn.replaceChildren('Adicionando...', el('span', {className: 'btn-spinner'}));
-
-    try {
-      let torrentId = null;
-      if (file) {
-        const token = await getValidToken();
-        const res = await fetch(`${API_BASE}/torrents/addTorrent`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${token}` },
-          body: file
-        });
-        if (!res.ok) throw new Error(`API error (${res.status})`);
-        const data = await res.json();
-        torrentId = data.id;
-      } else {
-        if (!magnet.startsWith('magnet:')) {
-          toast('Link magnet inválido', 'error');
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Adicionar Torrent';
-          return;
-        }
-        const data = await apiPost('/torrents/addMagnet', { magnet: magnet });
-        torrentId = data?.id;
-      }
-
-      if (torrentId) {
-        await trackId(String(torrentId));
-        toast('Torrent adicionado! Carregando arquivos...', 'success');
-        openFileSelectionModal(torrentId);
-        fetchAll();
-        browser.runtime.sendMessage('rd-check-now');
-      }
-    } catch (err) {
-      toast('Falha ao adicionar torrent', 'error');
-      submitBtn.disabled = false;
-      submitBtn.classList.remove('loading');
-      submitBtn.replaceChildren('Adicionar Torrent', el('span', {className: 'btn-spinner'}));
-    }
-  });
-
-  setTimeout(() => magnetInput.focus(), 100);
 }
 
 function showWebLinkModal() {
