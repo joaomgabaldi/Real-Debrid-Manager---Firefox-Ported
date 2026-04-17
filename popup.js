@@ -1,4 +1,4 @@
-import { OAUTH_BASE, getValidToken, apiGet, apiPost, apiDelete, trackId } from './api.js';
+import { OAUTH_BASE, getValidToken, apiGet, apiPost, apiDelete, trackId, onAuthFailure } from './api.js';
 
 const OPENSOURCE_CLIENT_ID = 'X245A4XAIBGVM';
 const i18n = (key) => browser.i18n.getMessage(key) || key;
@@ -57,8 +57,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   await loadCachedStorageValues();
   bindEvents();
-  const token = await getValidToken();
   
+  onAuthFailure(() => forceLogout());
+  
+  const token = await getValidToken();
   if (token) {
     hasValidToken = true;
     await loadCachedData();
@@ -437,7 +439,7 @@ async function fetchTorrentFiles(dl, itemEl) {
     itemEl.dataset.fileCount = String(dl.files.length);
     cacheData(allDownloads);
   } catch (err) {
-    if (err.message === 'Unauthenticated') return forceLogout();
+    if (err.message === 'Unauthenticated') return;
     console.error('Falha ao buscar torrent files:', err);
   }
 }
@@ -505,7 +507,7 @@ async function deleteDownload(type, id) {
     if (allDownloads.length === 0) showState('empty');
     toast(i18n('removed'), 'success');
   } catch (err) {
-    if (err.message === 'Unauthenticated') return forceLogout();
+    if (err.message === 'Unauthenticated') return;
     toast(i18n('deleteFailed'), 'error');
     if (itemElement) {
       itemElement.style.opacity = '1';
@@ -591,7 +593,7 @@ async function downloadFile(type, id) {
 
     toast(i18n('unknownDlType'), 'error');
   } catch (err) {
-    if (err.message === 'Unauthenticated') return forceLogout();
+    if (err.message === 'Unauthenticated') return;
     const msg = err.name === 'AbortError' ? i18n('dlTimeout') : i18n('dlFailed');
     toast(msg, 'error');
   }
@@ -777,7 +779,7 @@ async function fetchAll(isBackgroundSync = false) {
     else stopAutoRefresh();
 
   } catch (err) {
-    if (err.message === 'Unauthenticated') return forceLogout();
+    if (err.message === 'Unauthenticated') return;
     if (allDownloads.length === 0) showState('empty');
     if (hasValidToken) toast(i18n('fetchingDownloadsFailed'), 'error');
   }
@@ -873,7 +875,7 @@ async function fetchUserInfo() {
       browser.storage.local.set({ rd_cached_user: res });
     }
   } catch (err) {
-    if (err.message === 'Unauthenticated') forceLogout();
+    if (err.message === 'Unauthenticated') return;
   }
 }
 
@@ -1076,7 +1078,7 @@ function renderDownloads() {
 
 function renderItemMeta(dl) {
   const status = getStatus(dl);
-  const statusClass = getStatusClass(status);
+  const statusClass = getStatusClass(dl.download_state);
   const progress = dl.progress != null ? Math.round(dl.progress * 100) : (isCompleted(dl) ? 100 : 0);
   const size = dl.size ? formatBytes(dl.size) : '—';
   const completed = isCompleted(dl);
@@ -1308,11 +1310,12 @@ function getStatus(dl) {
   return stateMap[s] || s.replace(/_/g, ' ');
 }
 
-function getStatusClass(status) {
-  if (status === i18n('statusCompleted')) return 'completed';
-  if (status === i18n('statusDownloading') || status === i18n('statusUploading') || status === i18n('statusProcessing')) return 'downloading';
-  if (status === i18n('statusQueued') || status === i18n('statusWaiting')) return 'queued';
-  if (status === i18n('statusError')) return 'error';
+function getStatusClass(state) {
+  const s = state || '';
+  if (s === 'completed' || s === 'downloaded') return 'completed';
+  if (s === 'downloading' || s === 'uploading' || s === 'processing' || s === 'compressing') return 'downloading';
+  if (s === 'queued' || s === 'waiting_selection' || s === 'magnet_conversion' || s === 'waiting_files_selection') return 'queued';
+  if (s === 'error' || s === 'magnet_error' || s === 'virus' || s === 'dead') return 'error';
   return 'unknown';
 }
 
@@ -1617,7 +1620,7 @@ async function openFileSelectionModal(torrentId) {
       await apiDelete(`/torrents/delete/${torrentId}`);
       toast(i18n('torrentCanceled'), 'success');
     } catch (err) {
-      if (err.message === 'Unauthenticated') return forceLogout();
+      if (err.message === 'Unauthenticated') return;
       toast(i18n('errorRemove'), 'error');
     }
     addIgnoreLock(torrentId);
@@ -1647,7 +1650,7 @@ async function openFileSelectionModal(torrentId) {
       info = await apiGet(`/torrents/info/${torrentId}`);
       if (info && info.status !== 'magnet_conversion') break;
     } catch (err) {
-      if (err.message === 'Unauthenticated') return forceLogout();
+      if (err.message === 'Unauthenticated') return;
     }
     await new Promise(r => setTimeout(r, 1000));
     attempts++;
@@ -1726,7 +1729,7 @@ async function openFileSelectionModal(torrentId) {
       fetchAll();
       browser.runtime.sendMessage('rd-check-now');
     } catch (err) {
-      if (err.message === 'Unauthenticated') return forceLogout();
+      if (err.message === 'Unauthenticated') return;
       toast(i18n('failedStart'), 'error');
       confirmBtn.disabled = false;
       cancelBtn.disabled = false;
@@ -1809,7 +1812,7 @@ function showWebLinkModal() {
         fetchAll();
       }
     } catch (err) {
-      if (err.message === 'Unauthenticated') return forceLogout();
+      if (err.message === 'Unauthenticated') return;
       toast(i18n('failedUnlock'), 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
