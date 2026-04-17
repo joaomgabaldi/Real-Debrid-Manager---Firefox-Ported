@@ -1814,8 +1814,15 @@ function formatTimeAgo(dateStr) {
   if (!dateStr) return null;
   const date = new Date(dateStr);
   if (isNaN(date)) return null;
-  const diffDays = Math.floor(Math.abs(Date.now() - date.getTime()) / 86400000);
-  if (diffDays === 0) return i18n('justNow');
+
+  const diffMs = Math.abs(Date.now() - date.getTime());
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return i18n('justNow');
+  if (diffHours < 1) return `${i18n('agoDays')} ${diffMins}m`;
+  if (diffDays < 1) return `${i18n('agoDays')} ${diffHours}h`;
   if (diffDays === 1) return `${i18n('agoDays')} 1d`;
   return `${i18n('agoDays')} ${diffDays}d`;
 }
