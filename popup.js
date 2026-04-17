@@ -1320,9 +1320,9 @@ function getStatus(dl) {
 function getStatusClass(dl) {
   const s = dl.download_state || '';
   if (s === 'completed' || s === 'downloaded') return 'completed';
-  if (['downloading', 'uploading', 'processing', 'compressing'].includes(s)) return 'downloading';
-  if (['queued', 'waiting_selection', 'magnet_conversion', 'waiting_files_selection'].includes(s)) return 'queued';
-  if (['error', 'magnet_error', 'virus', 'dead'].includes(s)) return 'error';
+  if (['downloading', 'uploading', 'compressing', 'processing'].includes(s)) return 'downloading';
+  if (['queued', 'waiting_files_selection', 'magnet_conversion'].includes(s)) return 'queued';
+  if (['error', 'dead', 'virus', 'magnet_error'].includes(s)) return 'error';
   return 'unknown';
 }
 
