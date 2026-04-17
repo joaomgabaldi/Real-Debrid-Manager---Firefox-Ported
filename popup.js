@@ -1363,7 +1363,7 @@ function showAuthModal(autoStartOauth = false) {
           makeSvg([['path',{d:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}],['circle',{cx:'12',cy:'7',r:'4'}]]),
           el('div', {style: 'display: flex; flex-direction: column; text-align: left; line-height: 1.2;'},
             el('span', {className: 'settings-account-name', style: 'font-weight: 600;'}, username),
-            el('span', {className: 'settings-account-points', style: 'font-size: 11px; color: var(--text-muted); margin-top: 2px;'}, userPoints + i18n('points'))
+            el('span', {className: 'settings-account-points', style: 'font-size: 11px; color: var(--text-muted); margin-top: 2px;'}, `${userPoints} ${i18n('points')}`)
           )
         ),
         el('button', {id: 'btn-logout', className: 'action-btn ghost', style: 'color: #f46878;'}, i18n('logout'))
