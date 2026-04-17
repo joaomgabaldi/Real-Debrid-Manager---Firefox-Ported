@@ -60,6 +60,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   onAuthFailure(() => forceLogout());
   
+  // Escutar eventos de falha de autenticação emitidos pelo background.js
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg && msg.action === 'force_logout') {
+      forceLogout();
+    }
+  });
+  
   const token = await getValidToken();
   if (token) {
     hasValidToken = true;
@@ -1078,7 +1085,7 @@ function renderDownloads() {
 
 function renderItemMeta(dl) {
   const status = getStatus(dl);
-  const statusClass = getStatusClass(dl.download_state);
+  const statusClass = getStatusClass(dl);
   const progress = dl.progress != null ? Math.round(dl.progress * 100) : (isCompleted(dl) ? 100 : 0);
   const size = dl.size ? formatBytes(dl.size) : '—';
   const completed = isCompleted(dl);
@@ -1310,12 +1317,12 @@ function getStatus(dl) {
   return stateMap[s] || s.replace(/_/g, ' ');
 }
 
-function getStatusClass(state) {
-  const s = state || '';
+function getStatusClass(dl) {
+  const s = dl.download_state || '';
   if (s === 'completed' || s === 'downloaded') return 'completed';
-  if (s === 'downloading' || s === 'uploading' || s === 'processing' || s === 'compressing') return 'downloading';
-  if (s === 'queued' || s === 'waiting_selection' || s === 'magnet_conversion' || s === 'waiting_files_selection') return 'queued';
-  if (s === 'error' || s === 'magnet_error' || s === 'virus' || s === 'dead') return 'error';
+  if (['downloading', 'uploading', 'processing', 'compressing'].includes(s)) return 'downloading';
+  if (['queued', 'waiting_selection', 'magnet_conversion', 'waiting_files_selection'].includes(s)) return 'queued';
+  if (['error', 'magnet_error', 'virus', 'dead'].includes(s)) return 'error';
   return 'unknown';
 }
 
