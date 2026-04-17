@@ -225,7 +225,7 @@ function bindEvents() {
     browser.windows.create({
       url: 'add.html',
       type: 'popup',
-      width: 420,
+      width: 430,
       height: 550
     });
     window.close();
