@@ -2,6 +2,23 @@ const API_BASE = 'https://api.real-debrid.com/rest/1.0';
 const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
 const OPENSOURCE_CLIENT_ID = 'X245A4XAIBGVM';
 
+const i18n = (key) => browser.i18n.getMessage(key) || key;
+
+function localizeHtmlPage() {
+  document.querySelectorAll('[data-i18n]').forEach(elem => {
+    const msg = browser.i18n.getMessage(elem.dataset.i18n);
+    if (msg) elem.textContent = msg;
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(elem => {
+    const msg = browser.i18n.getMessage(elem.dataset.i18nTitle);
+    if (msg) elem.title = msg;
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(elem => {
+    const msg = browser.i18n.getMessage(elem.dataset.i18nPlaceholder);
+    if (msg) elem.placeholder = msg;
+  });
+}
+
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -37,6 +54,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 document.addEventListener('DOMContentLoaded', async () => {
+  localizeHtmlPage();
   await loadSettings();
   await loadCachedStorageValues();
   bindEvents();
@@ -54,7 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const data = await browser.storage.local.get('rd_oauth_pending');
     if (data.rd_oauth_pending && data.rd_oauth_pending.expires_at > Date.now()) {
       const btn = $('#btn-login-api');
-      if (btn) btn.textContent = 'Verificando autorização...';
+      if (btn) btn.textContent = i18n('verifyingAuth');
       
       pollDeviceCredentials(data.rd_oauth_pending.device_code);
       oauthPollingInterval = setInterval(() => pollDeviceCredentials(data.rd_oauth_pending.device_code), 5000);
@@ -247,7 +265,7 @@ function bindEvents() {
     cycleIndex = (cycleIndex + 1) % (cycleStates.length + 1);
     if (cycleIndex === cycleStates.length) {
       cycleIndex = -1;
-      cycleBtn.textContent = 'Tipo';
+      cycleBtn.textContent = i18n('tabType');
       cycleBtn.dataset.cycleState = 'none';
       delete cycleBtn.dataset.cycleType;
       cycleBtn.classList.remove('active');
@@ -394,8 +412,8 @@ function parseTorrentInfo(info) {
     links: info.links || [],
     files: selectedFiles.map((f, idx) => ({
       id: idx,
-      name: f.path ? f.path.replace(/^\//, '') : `Arquivo ${idx + 1}`,
-      short_name: f.path ? f.path.split('/').pop() : `Arquivo ${idx + 1}`,
+      name: f.path ? f.path.replace(/^\//, '') : `${i18n('fileX')} ${idx + 1}`,
+      short_name: f.path ? f.path.split('/').pop() : `${i18n('fileX')} ${idx + 1}`,
       size: f.bytes || 0,
     })),
   };
@@ -459,7 +477,7 @@ async function deleteDownload(type, id) {
 
   try {
     if (type === 'torrent') {
-      toast('Excluindo...', 'success');
+      toast(i18n('deleting'), 'success');
       await apiDelete(`/torrents/delete/${id}`);
     } else if (type === 'web') {
       const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
@@ -481,9 +499,9 @@ async function deleteDownload(type, id) {
     cacheData(allDownloads);
 
     if (allDownloads.length === 0) showState('empty');
-    toast('Removido', 'success');
+    toast(i18n('removed'), 'success');
   } catch (err) {
-    toast('Falha ao excluir', 'error');
+    toast(i18n('deleteFailed'), 'error');
     if (itemElement) {
       itemElement.style.opacity = '1';
       itemElement.style.pointerEvents = 'auto';
@@ -517,7 +535,7 @@ async function deleteAllVisible() {
     renderDownloads();
   }, 150);
 
-  toast('Excluindo...', 'success');
+  toast(i18n('deleting'), 'success');
 
   const webTargets = targets.filter(dl => dl._type === 'web');
   const torrentTargets = targets.filter(dl => dl._type === 'torrent');
@@ -549,7 +567,7 @@ async function downloadFile(type, id) {
     }
 
     if (type === 'torrent') {
-      toast('Iniciando download...', 'success');
+      toast(i18n('startingDownload'), 'success');
       let links = dl?.links || [];
       if (links.length === 0) {
         const info = await apiGet(`/torrents/info/${id}`);
@@ -559,29 +577,29 @@ async function downloadFile(type, id) {
       if (links.length > 0) {
         const unrestricted = await apiPost('/unrestrict/link', { link: links[0] }, false, TIMEOUT_DOWNLOAD_MS);
         if (unrestricted?.download) triggerDownload(unrestricted.download, dl.name);
-        else toast('Falha ao obter link de download', 'error');
+        else toast(i18n('failedDlLink'), 'error');
       } else {
-        toast('Nenhum link de download disponível', 'error');
+        toast(i18n('noDlLink'), 'error');
       }
       return;
     }
 
-    toast('Tipo de download desconhecido', 'error');
+    toast(i18n('unknownDlType'), 'error');
   } catch (err) {
-    const msg = err.name === 'AbortError' ? 'O pedido de download expirou' : 'Falha ao baixar';
+    const msg = err.name === 'AbortError' ? i18n('dlTimeout') : i18n('dlFailed');
     toast(msg, 'error');
   }
 }
 
 async function triggerDownload(url, filename = '') {
   if (!String(url).startsWith('https://') && !String(url).startsWith('http://')) {
-    toast('Link de download inválido', 'error');
+    toast(i18n('invalidDlLink'), 'error');
     return;
   }
 
   if (useJDownloader) {
     try {
-      toast('Enviando para o JDownloader...', 'success');
+      toast(i18n('sendingToJd'), 'success');
       const formData = new URLSearchParams();
       formData.append('urls', url);
       formData.append('autostart', '1');
@@ -594,17 +612,17 @@ async function triggerDownload(url, filename = '') {
       });
 
       if (res.ok) {
-        toast('Adicionado ao JDownloader!', 'success');
+        toast(i18n('addedToJd'), 'success');
       } else {
         throw new Error('JD2 Error');
       }
     } catch (err) {
-      toast('JDownloader não responde (porta 9666)', 'error');
+      toast(i18n('jdUnresponsive'), 'error');
     }
     return;
   }
 
-  toast('Iniciando download...', 'success');
+  toast(i18n('startingDownload'), 'success');
   const a = document.createElement('a');
   a.href = url;
   a.download = '';
@@ -624,7 +642,8 @@ function fetchWithTimeout(url, options = {}, timeoutMs) {
     .finally(() => clearTimeout(timer));
 }
 
-async function forceLogout(msg = 'Acesso revogado ou expirado. Por favor, reconecte-se.') {
+async function forceLogout(msg = null) {
+  if (!msg) msg = i18n('accessRevoked');
   hasValidToken = false;
   stopAutoRefresh();
   await browser.storage.local.remove([
@@ -638,7 +657,7 @@ async function forceLogout(msg = 'Acesso revogado ou expirado. Por favor, recone
   if (tile) tile.style.display = 'none';
   
   const btn = $('#btn-login-api');
-  if (btn) btn.textContent = 'Conectar ao Real-Debrid';
+  if (btn) btn.textContent = i18n('connectRd');
   
   closeModal(true);
   showState('no-api');
@@ -664,7 +683,7 @@ async function getValidToken() {
       if (!res.ok) {
         hasValidToken = false;
         if (res.status === 401 || res.status === 400 || res.status === 403) {
-          forceLogout('Sessão expirada. Reautentique-se.');
+          forceLogout(i18n('sessionExpired'));
         }
         return null;
       }
@@ -690,7 +709,7 @@ async function apiGet(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
   const res = await fetchWithTimeout(`${API_BASE}${path}`, { headers: { Authorization: `Bearer ${token}` } }, timeoutMs);
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
-      forceLogout('Acesso revogado ou expirado. Reautentique-se.');
+      forceLogout();
       throw new Error('Unauthenticated');
     }
     if (res.status === 404) return null;
@@ -721,7 +740,7 @@ async function apiPost(path, body, isForm = false, timeoutMs = null) {
   const res = await fetchFn;
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
-      forceLogout('Acesso revogado ou expirado. Reautentique-se.');
+      forceLogout();
       throw new Error('Unauthenticated');
     }
     throw new Error(`API error (${res.status})`);
@@ -736,7 +755,7 @@ async function apiDelete(path, timeoutMs = TIMEOUT_DEFAULT_MS) {
   const res = await fetchWithTimeout(`${API_BASE}${path}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }, timeoutMs);
   if (!res.ok && res.status !== 204) {
     if (res.status === 401 || res.status === 403) {
-      forceLogout('Acesso revogado ou expirado. Reautentique-se.');
+      forceLogout();
       throw new Error('Unauthenticated');
     }
     throw new Error(`API error (${res.status})`);
@@ -766,7 +785,7 @@ async function fetchAll(isBackgroundSync = false) {
         }
       }
     } catch (err) {
-      console.warn('Falha ao buscar torrents:', err);
+      console.warn(i18n('fetchingDownloadsFailed'), err);
     }
 
     if (isBackgroundSync && allDownloads.length > 0) {
@@ -852,14 +871,14 @@ async function fetchAll(isBackgroundSync = false) {
 
   } catch (err) {
     if (allDownloads.length === 0) showState('empty');
-    if (hasValidToken) toast('Falha ao buscar downloads', 'error');
+    if (hasValidToken) toast(i18n('fetchingDownloadsFailed'), 'error');
   }
 }
 
 function normalizeTorrent(t) {
   return {
     id: t.id,
-    name: t.filename || 'Torrent sem nome',
+    name: t.filename || i18n('unnamedTorrent'),
     size: t.bytes || 0,
     progress: (t.progress || 0) / 100,
     download_state: mapRdStatus(t.status),
@@ -895,7 +914,7 @@ function saveLocalDownloads(unrestrictResults) {
       const existing = data.rd_local_downloads || [];
       const newEntries = unrestrictResults.map(d => ({
         id: d.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: d.filename || 'Download sem nome',
+        name: d.filename || i18n('unnamedDownload'),
         size: d.filesize || 0,
         progress: 1,
         download_state: 'completed',
@@ -973,13 +992,13 @@ function showUserBar(data) {
 }
 
 function calculateDaysRemaining(expiresAt) {
-  if (!expiresAt) return '— dias restantes';
+  if (!expiresAt) return i18n('noDaysRemaining');
   const [y, m, d] = expiresAt.slice(0, 10).split('-').map(Number);
   const now = new Date();
   const diffDays = Math.round(
     (Date.UTC(y, m - 1, d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000
   );
-  return `${diffDays} dia${diffDays === 1 ? '' : 's'} restante${diffDays === 1 ? '' : 's'}`;
+  return `${diffDays} ${diffDays === 1 ? i18n('dayRemaining') : i18n('daysRemaining')}`;
 }
 
 function filterByAge(downloads, days) {
@@ -998,12 +1017,12 @@ function updateAgeFilterUI() {
   });
 
   if (ageFilterDays) {
-    const labels = { 1: '> 1 dia', 7: '> 1 semana', 30: '> 1 mês' };
-    label.textContent = labels[ageFilterDays];
+    const labels = { 1: `> 1 ${i18n('moreThan1Day').replace('Mais de 1 ', '')}`, 7: `> 1 ${i18n('moreThan1Week').replace('Mais de 1 ', '')}`, 30: `> 1 ${i18n('moreThan1Month').replace('Mais de 1 ', '')}` };
+    label.textContent = labels[ageFilterDays] || i18n('olderThan');
     btn.classList.add('active');
     clearOpt.classList.remove('hidden');
   } else {
-    label.textContent = 'Mais antigo que...';
+    label.textContent = i18n('olderThan');
     btn.classList.remove('active');
     clearOpt.classList.add('hidden');
   }
@@ -1032,7 +1051,7 @@ function renderDownloads() {
   const searchCountEl = $('#search-count');
   if (searchCountEl) {
     if (searchQuery || ageFilterDays) {
-      searchCountEl.textContent = `${currentFiltered.length} resultados`;
+      searchCountEl.textContent = `${currentFiltered.length} ${i18n('resultsLabel')}`;
       searchCountEl.classList.remove('hidden');
     } else {
       searchCountEl.textContent = '';
@@ -1094,7 +1113,7 @@ function renderDownloads() {
           dlBtn.className = 'dl-download-btn';
           dlBtn.dataset.type = dl._type;
           dlBtn.dataset.id = String(dl.id);
-          dlBtn.title = 'Baixar';
+          dlBtn.title = i18n('download');
           const dlBtnIcon = makeDownloadSvg();
           dlBtnIcon.style.cssText = 'position:relative;z-index:1;';
           dlBtn.appendChild(dlBtnIcon);
@@ -1107,7 +1126,7 @@ function renderDownloads() {
           selectBtn.className = 'dl-download-btn';
           selectBtn.dataset.action = 'select-files';
           selectBtn.dataset.id = String(dl.id);
-          selectBtn.title = 'Selecionar Arquivos';
+          selectBtn.title = i18n('selectFiles');
           const selectIcon = makeSvg([
             ['polyline', {points: '9 11 12 14 22 4'}],
             ['path', {d: 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'}]
@@ -1158,7 +1177,7 @@ function renderItemMeta(dl) {
 
   const metaEl = document.createElement('div');
   metaEl.className = 'dl-meta';
-  metaEl.title = dl.name || 'Download sem nome';
+  metaEl.title = dl.name || i18n('unnamedDownload');
 
   const statusSpan = document.createElement('span');
   statusSpan.className = 'dl-status';
@@ -1180,15 +1199,15 @@ function renderItemMeta(dl) {
       const name = largest.short_name || largest.name || '';
       const dotIdx = name.lastIndexOf('.');
       if (dotIdx > 0) metaParts.push(name.slice(dotIdx + 1).toUpperCase());
-      metaParts.push(`${fileCount} arquivo${fileCount !== 1 ? 's' : ''}`);
+      metaParts.push(`${fileCount} ${i18n('fileX').toLowerCase()}${fileCount !== 1 ? 's' : ''}`);
     }
     const addedTime = dl.created_at ? formatTimeAgo(dl.created_at) : null;
-    if (addedTime) metaParts.push(`adicionado ${addedTime}`);
+    if (addedTime) metaParts.push(`${i18n('addedAt')} ${addedTime}`);
     infoSpan.textContent = metaParts.join(' • ');
   } else {
     const speed = dl.download_speed ? `${formatBytes(dl.download_speed)}/s` : '';
     const seeds = dl.seeds != null ? `${dl.seeds} Seeds` : '';
-    const eta = (dl.eta && dl.eta < 864000) ? `${formatETA(dl.eta)} Previsto` : (dl.eta ? 'Sem previsão' : '');
+    const eta = (dl.eta && dl.eta < 864000) ? `${formatETA(dl.eta)} ${i18n('predicted')}` : (dl.eta ? i18n('noPrediction') : '');
     infoSpan.textContent = [size, seeds, speed, eta].filter(Boolean).join(' • ');
   }
 
@@ -1226,11 +1245,11 @@ function renderExpandedContent(dl) {
       files.forEach((f, idx) => {
         const li = document.createElement('li');
         li.className = 'dl-file-item dl-file-info';
-        li.title = fileBaseName(f.name || f.short_name || `Arquivo ${idx + 1}`);
+        li.title = fileBaseName(f.name || f.short_name || `${i18n('fileX')} ${idx + 1}`);
         li.style.cursor = 'default';
         const fnameEl = document.createElement('span');
         fnameEl.className = 'dl-file-name';
-        fnameEl.textContent = f.short_name || f.name || `Arquivo ${idx + 1}`;
+        fnameEl.textContent = f.short_name || f.name || `${i18n('fileX')} ${idx + 1}`;
         fnameEl.style.opacity = '0.7';
         const fsize = document.createElement('span');
         fsize.className = 'dl-file-size';
@@ -1244,7 +1263,7 @@ function renderExpandedContent(dl) {
     } else {
       const noFiles = document.createElement('div');
       noFiles.className = 'dl-no-files';
-      noFiles.textContent = 'Nenhuma informação de arquivo disponível';
+      noFiles.textContent = i18n('fileInfoMissing');
       expandedContent.appendChild(noFiles);
     }
   } else if (type === 'web' && dl._rd_download) {
@@ -1268,7 +1287,7 @@ function renderExpandedContent(dl) {
   } else {
     const noFiles = document.createElement('div');
     noFiles.className = 'dl-no-files';
-    noFiles.textContent = 'Arquivos disponíveis quando o download for concluído';
+    noFiles.textContent = i18n('filesAvailableLater');
     expandedContent.appendChild(noFiles);
   }
 
@@ -1276,7 +1295,7 @@ function renderExpandedContent(dl) {
 }
 
 function renderItem(dl) {
-  const name = dl.name || 'Download sem nome';
+  const name = dl.name || i18n('unnamedDownload');
   const type = dl._type;
   const completed = isCompleted(dl);
 
@@ -1299,7 +1318,7 @@ function renderItem(dl) {
     dlBtn.className = 'dl-download-btn';
     dlBtn.dataset.type = type;
     dlBtn.dataset.id = String(dl.id);
-    dlBtn.title = 'Baixar';
+    dlBtn.title = i18n('download');
     const dlBtnIcon = makeDownloadSvg();
     dlBtnIcon.style.cssText = 'position:relative;z-index:1;';
     dlBtn.appendChild(dlBtnIcon);
@@ -1309,7 +1328,7 @@ function renderItem(dl) {
     selectBtn.className = 'dl-download-btn';
     selectBtn.dataset.action = 'select-files';
     selectBtn.dataset.id = String(dl.id);
-    selectBtn.title = 'Selecionar Arquivos';
+    selectBtn.title = i18n('selectFiles');
     const selectIcon = makeSvg([
       ['polyline', {points: '9 11 12 14 22 4'}],
       ['path', {d: 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'}]
@@ -1323,7 +1342,7 @@ function renderItem(dl) {
   deleteBtn.className = 'dl-delete-btn';
   deleteBtn.dataset.type = type;
   deleteBtn.dataset.id = String(dl.id);
-  deleteBtn.title = 'Excluir';
+  deleteBtn.title = i18n('delete');
   const deleteBtnIcon = makeTrashSvg();
   deleteBtnIcon.style.cssText = 'position:relative;z-index:1;';
   deleteBtn.appendChild(deleteBtnIcon);
@@ -1343,13 +1362,13 @@ function renderItem(dl) {
 
 function isCompleted(dl) {
   const s = (dl.download_state || '').toLowerCase();
-  if (s === 'processing' || s === 'waiting_selection' || s.includes('queue') || s === 'processando' || s === 'aguardando seleção' || s === 'na fila') return false;
-  return s === 'completed' || s === 'concluído' || (dl.progress != null && dl.progress >= 1);
+  if (s === 'processing' || s === 'waiting_selection' || s.includes('queue')) return false;
+  return s === 'completed' || (dl.progress != null && dl.progress >= 1);
 }
 
 function isReady(dl) {
   const s = (dl.download_state || '').toLowerCase();
-  return s === 'completed' || s === 'concluído';
+  return s === 'completed';
 }
 
 function canDownload(dl) {
@@ -1360,36 +1379,34 @@ function canDownload(dl) {
 
 function getStatus(dl) {
   const s = dl.download_state || '';
-  if (!s) return dl.progress >= 1 ? 'concluído' : 'desconhecido';
+  if (!s) return dl.progress >= 1 ? i18n('statusCompleted') : i18n('statusUnknown');
   
-  const state = s.toLowerCase();
   const stateMap = {
-    'error': 'erro',
-    'magnet_error': 'erro',
-    'virus': 'erro',
-    'dead': 'erro',
-    'processing': 'processando',
-    'compressing': 'processando',
-    'magnet_conversion': 'aguardando seleção',
-    'waiting_selection': 'aguardando seleção',
-    'waiting_files_selection': 'aguardando seleção',
-    'queued': 'na fila',
-    'downloading': 'baixando',
-    'completed': 'concluído',
-    'downloaded': 'concluído',
-    'uploading': 'enviando',
-    'unknown': 'desconhecido'
+    'error': i18n('statusError'),
+    'magnet_error': i18n('statusError'),
+    'virus': i18n('statusError'),
+    'dead': i18n('statusError'),
+    'processing': i18n('statusProcessing'),
+    'compressing': i18n('statusProcessing'),
+    'magnet_conversion': i18n('statusWaiting'),
+    'waiting_selection': i18n('statusWaiting'),
+    'waiting_files_selection': i18n('statusWaiting'),
+    'queued': i18n('statusQueued'),
+    'downloading': i18n('statusDownloading'),
+    'completed': i18n('statusCompleted'),
+    'downloaded': i18n('statusCompleted'),
+    'uploading': i18n('statusUploading'),
+    'unknown': i18n('statusUnknown')
   };
   
-  return stateMap[state] || state.replace(/_/g, ' ');
+  return stateMap[s] || s.replace(/_/g, ' ');
 }
 
 function getStatusClass(status) {
-  if (status.includes('concluíd') || status.includes('complet')) return 'completed';
-  if (status.includes('baixando') || status.includes('enviando') || status.includes('download') || status.includes('uploading')) return 'downloading';
-  if (status.includes('processando') || status.includes('process') || status.includes('compress')) return 'downloading';
-  if (status.includes('aguardando') || status.includes('na fila') || status.includes('waiting') || status.includes('queue')) return 'queued';
-  if (status.includes('erro') || status.includes('error') || status.includes('dead') || status.includes('virus')) return 'error';
+  if (status === i18n('statusCompleted')) return 'completed';
+  if (status === i18n('statusDownloading') || status === i18n('statusUploading') || status === i18n('statusProcessing')) return 'downloading';
+  if (status === i18n('statusQueued') || status === i18n('statusWaiting')) return 'queued';
+  if (status === i18n('statusError')) return 'error';
   return 'downloading';
 }
 
@@ -1459,14 +1476,14 @@ function showAuthModal(autoStartOauth = false) {
           makeSvg([['path',{d:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'}],['circle',{cx:'12',cy:'7',r:'4'}]]),
           el('div', {style: 'display: flex; flex-direction: column; text-align: left; line-height: 1.2;'},
             el('span', {className: 'settings-account-name', style: 'font-weight: 600;'}, username),
-            el('span', {className: 'settings-account-points', style: 'font-size: 11px; color: var(--text-muted); margin-top: 2px;'}, userPoints + ' Pontos de Fidelidade')
+            el('span', {className: 'settings-account-points', style: 'font-size: 11px; color: var(--text-muted); margin-top: 2px;'}, userPoints + i18n('points'))
           )
         ),
-        el('button', {id: 'btn-logout', className: 'action-btn ghost', style: 'color: #f46878;'}, 'Sair')
+        el('button', {id: 'btn-logout', className: 'action-btn ghost', style: 'color: #f46878;'}, i18n('logout'))
       );
     } else {
       authSection = el('div', {style: 'text-align:center; padding: 10px;'},
-        el('button', {id: 'btn-start-oauth', className: 'action-btn primary'}, 'Conectar com Real-Debrid')
+        el('button', {id: 'btn-start-oauth', className: 'action-btn primary'}, i18n('connectRd'))
       );
     }
 
@@ -1474,8 +1491,8 @@ function showAuthModal(autoStartOauth = false) {
       el('div', {className: 'form-group'},
         el('div', {className: 'toggle-row'},
           el('div', {},
-            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Menu de contexto do botão direito'),
-            el('div', {className: 'form-hint'}, 'Mostrar "Enviar para o RD Manager" ao clicar com o botão direito em links.')
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, i18n('contextMenuLabel')),
+            el('div', {className: 'form-hint'}, i18n('contextMenuDesc'))
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-context-menu', checked: contextMenuEnabled ? 'checked' : null}),
@@ -1487,10 +1504,10 @@ function showAuthModal(autoStartOauth = false) {
         el('div', {className: 'toggle-row'},
           el('div', {},
             el('div', {style: 'display:flex;align-items:center;gap:5px;margin-bottom:2px;'},
-              el('div', {className: 'form-label', style: 'margin-bottom:0;'}, 'Notificações de download'),
-              el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Não enviará requisições em segundo plano se desativado.'))
+              el('div', {className: 'form-label', style: 'margin-bottom:0;'}, i18n('dlNotificationsLabel')),
+              el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, i18n('dlNotificationsInfo')))
             ),
-            el('div', {className: 'form-hint'}, 'Notifique-me quando os downloads estiverem prontos.')
+            el('div', {className: 'form-hint'}, i18n('dlNotificationsDesc'))
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-notifications', checked: notificationsEnabled ? 'checked' : null}),
@@ -1501,8 +1518,8 @@ function showAuthModal(autoStartOauth = false) {
       el('div', {className: 'form-group'},
         el('div', {className: 'toggle-row'},
           el('div', {},
-            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Efeito de elevação ao passar o mouse'),
-            el('div', {className: 'form-hint'}, 'Adiciona uma elevação sutil e sombra.')
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, i18n('hoverLiftLabel')),
+            el('div', {className: 'form-hint'}, i18n('hoverLiftDesc'))
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-hover-lift', checked: hoverLiftEnabled ? 'checked' : null}),
@@ -1513,8 +1530,8 @@ function showAuthModal(autoStartOauth = false) {
       el('div', {className: 'form-group'},
         el('div', {className: 'toggle-row'},
           el('div', {},
-            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, 'Enviar para o JDownloader 2'),
-            el('div', {className: 'form-hint'}, 'Envia links para a porta 9666. O JD2 precisa estar aberto.')
+            el('div', {className: 'form-label', style: 'margin-bottom:2px;'}, i18n('jd2Label')),
+            el('div', {className: 'form-hint'}, i18n('jd2Desc'))
           ),
           el('label', {className: 'toggle-switch'},
             el('input', {type: 'checkbox', id: 'toggle-jd2', checked: jd2Enabled ? 'checked' : null}),
@@ -1525,7 +1542,7 @@ function showAuthModal(autoStartOauth = false) {
       el('div', {className: 'settings-account-section', id: 'settings-account-area'}, authSection)
     );
 
-    openModalWithNode('Configurações', body);
+    openModalWithNode(i18n('settings'), body);
 
     $('#toggle-context-menu').addEventListener('change', (e) => browser.storage.local.set({ rd_context_menu: e.target.checked }));
     $('#toggle-notifications').addEventListener('change', (e) => {
@@ -1563,7 +1580,7 @@ function showAuthModal(autoStartOauth = false) {
     const logoutBtn = $('#btn-logout');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
-        forceLogout('Sessão encerrada com sucesso.');
+        forceLogout();
       });
     }
   });
@@ -1571,7 +1588,7 @@ function showAuthModal(autoStartOauth = false) {
 
 async function startOAuthFlow() {
   const container = $('#settings-account-area');
-  container.replaceChildren(el('div', {style: 'text-align:center; padding:10px;'}, el('div', {className: 'spinner'}), ' Solicitando código...'));
+  container.replaceChildren(el('div', {style: 'text-align:center; padding:10px;'}, el('div', {className: 'spinner'}), i18n('requestingCode')));
   
   try {
     const res = await fetch(`${OAUTH_BASE}/device/code?client_id=${OPENSOURCE_CLIENT_ID}&new_credentials=yes`);
@@ -1589,7 +1606,7 @@ async function startOAuthFlow() {
     await browser.storage.local.set({ rd_oauth_pending: pendingData });
     renderOAuthPending(pendingData);
   } catch (err) {
-    container.replaceChildren(el('div', {style: 'color: #f46878;'}, 'Erro ao iniciar autenticação.'));
+    container.replaceChildren(el('div', {style: 'color: #f46878;'}, i18n('authError')));
     setTimeout(() => showAuthModal(false), 2000);
   }
 }
@@ -1600,11 +1617,11 @@ function renderOAuthPending(data) {
 
   container.replaceChildren(
     el('div', {style: 'text-align:center; padding: 10px;'},
-      el('h4', {style: 'margin-bottom: 5px;'}, 'Acesse a URL e insira o código:'),
+      el('h4', {style: 'margin-bottom: 5px;'}, i18n('accessUrl')),
       el('a', {href: data.verification_url, target: '_blank', style: 'color: var(--accent); font-weight: bold; font-size: 16px;'}, data.verification_url),
       el('div', {style: 'font-size: 24px; font-weight: bold; letter-spacing: 2px; margin: 15px 0; user-select: all;'}, data.user_code),
-      el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px; margin-bottom: 10px;'}, 'Aguardando autorização...'),
-      el('button', {id: 'btn-cancel-oauth', className: 'action-btn ghost', style: 'color: #f46878; margin: 0 auto;'}, 'Cancelar')
+      el('div', {id: 'oauth-status', style: 'color: var(--text-muted); font-size: 12px; margin-bottom: 10px;'}, i18n('waitingAuth')),
+      el('button', {id: 'btn-cancel-oauth', className: 'action-btn ghost', style: 'color: #f46878; margin: 0 auto;'}, i18n('cancel'))
     )
   );
 
@@ -1612,7 +1629,7 @@ function renderOAuthPending(data) {
     if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
     await browser.storage.local.remove('rd_oauth_pending');
     const btn = $('#btn-login-api');
-    if (btn) btn.textContent = 'Conectar ao Real-Debrid';
+    if (btn) btn.textContent = i18n('connectRd');
     showAuthModal(false);
   });
 
@@ -1635,17 +1652,17 @@ async function pollDeviceCredentials(deviceCode) {
   } catch (err) {
     if (oauthPollingInterval) { clearInterval(oauthPollingInterval); oauthPollingInterval = null; }
     const statusEl = $('#oauth-status');
-    if (statusEl) statusEl.textContent = 'Erro ou expirado. Cancele e tente novamente.';
+    if (statusEl) statusEl.textContent = i18n('authError');
     await browser.storage.local.remove('rd_oauth_pending');
     const btn = $('#btn-login-api');
-    if (btn) btn.textContent = 'Conectar ao Real-Debrid';
+    if (btn) btn.textContent = i18n('connectRd');
   }
 }
 
 async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
   try {
     const statusEl = $('#oauth-status');
-    if (statusEl) statusEl.textContent = 'Finalizando login...';
+    if (statusEl) statusEl.textContent = i18n('finishingLogin');
     
     const res = await fetch(`${OAUTH_BASE}/token`, {
       method: 'POST',
@@ -1670,16 +1687,16 @@ async function exchangeDeviceToken(clientId, clientSecret, deviceCode) {
       });
       await browser.storage.local.remove('rd_oauth_pending');
       const btn = $('#btn-login-api');
-      if (btn) btn.textContent = 'Conectar ao Real-Debrid';
+      if (btn) btn.textContent = i18n('connectRd');
       hasValidToken = true;
-      toast('Login concluído!', 'success');
+      toast(i18n('loginComplete'), 'success');
       closeModal();
       fetchAll();
       fetchUserInfo();
     }
   } catch (err) {
     const statusEl = $('#oauth-status');
-    if (statusEl) statusEl.textContent = 'Falha ao trocar token.';
+    if (statusEl) statusEl.textContent = i18n('failedToken');
   }
 }
 
@@ -1692,25 +1709,25 @@ async function openFileSelectionModal(torrentId) {
     if (btn) btn.disabled = true;
     try {
       await apiDelete(`/torrents/delete/${torrentId}`);
-      toast('Torrent cancelado', 'success');
+      toast(i18n('torrentCanceled'), 'success');
     } catch (err) {
-      toast('Erro ao remover', 'error');
+      toast(i18n('errorRemove'), 'error');
     }
     addIgnoreLock(torrentId);
     closeModal(true);
     fetchAll();
   };
 
-  const cancelLoadingBtn = el('button', {className: 'form-submit', style: 'margin-top: 15px; width: 100%; justify-content: center; background: #f46878 !important; color: #fff !important; border: none !important;'}, 'Cancelar Torrent');
+  const cancelLoadingBtn = el('button', {className: 'form-submit', style: 'margin-top: 15px; width: 100%; justify-content: center; background: #f46878 !important; color: #fff !important; border: none !important;'}, i18n('cancelTorrent'));
   cancelLoadingBtn.addEventListener('click', () => handleCancel(cancelLoadingBtn));
 
   const modalBody = el('div', {className: 'state-message', style: 'padding: 20px 0;'},
     el('div', {className: 'spinner'}),
-    el('span', {style: 'margin-top: 10px; display: block;'}, 'Aguardando conversão do magnet...'),
+    el('span', {style: 'margin-top: 10px; display: block;'}, i18n('waitingMagnet')),
     cancelLoadingBtn
   );
 
-  openModalWithNode('Selecionar Arquivos', modalBody, true);
+  openModalWithNode(i18n('selectFiles'), modalBody, true);
 
   let info;
   let attempts = 0;
@@ -1730,7 +1747,7 @@ async function openFileSelectionModal(torrentId) {
   if (isCancelled) return;
 
   if (!info || info.status === 'error' || info.status === 'dead') {
-    toast('Erro ao obter arquivos do torrent', 'error');
+    toast(i18n('errorGetFiles'), 'error');
     addIgnoreLock(torrentId);
     closeModal(true);
     fetchAll();
@@ -1745,7 +1762,7 @@ async function openFileSelectionModal(torrentId) {
   }
 
   if (!info.files || info.files.length === 0) {
-    toast('Nenhum arquivo encontrado para seleção', 'error');
+    toast(i18n('noFilesFound'), 'error');
     addIgnoreLock(torrentId);
     closeModal(true);
     fetchAll();
@@ -1771,14 +1788,14 @@ async function openFileSelectionModal(torrentId) {
 
   if (fileList.lastChild) fileList.lastChild.style.borderBottom = 'none';
 
-  const selectAllBtn = el('button', {className: 'action-btn ghost', style: 'margin-bottom: 10px; width: 100%; justify-content: center;'}, 'Selecionar Tudo / Inverter');
+  const selectAllBtn = el('button', {className: 'action-btn ghost', style: 'margin-bottom: 10px; width: 100%; justify-content: center;'}, i18n('selectAll'));
   selectAllBtn.addEventListener('click', () => {
     const allChecked = checkboxes.every(c => c.checked);
     checkboxes.forEach(c => c.checked = !allChecked);
   });
 
-  const cancelBtn = el('button', {className: 'form-submit', style: 'flex: 1; margin-right: 5px; background: #f46878 !important; color: #fff !important; border: none !important;'}, 'Cancelar');
-  const confirmBtn = el('button', {className: 'form-submit', style: 'flex: 1; margin-left: 5px;'}, 'Iniciar Download');
+  const cancelBtn = el('button', {className: 'form-submit', style: 'flex: 1; margin-right: 5px; background: #f46878 !important; color: #fff !important; border: none !important;'}, i18n('cancel'));
+  const confirmBtn = el('button', {className: 'form-submit', style: 'flex: 1; margin-left: 5px;'}, i18n('startDownload'));
 
   cancelBtn.addEventListener('click', () => {
     confirmBtn.disabled = true;
@@ -1787,23 +1804,23 @@ async function openFileSelectionModal(torrentId) {
 
   confirmBtn.addEventListener('click', async () => {
     const selected = checkboxes.filter(c => c.checked).map(c => c.value);
-    if (selected.length === 0) return toast('Selecione pelo menos um arquivo', 'error');
+    if (selected.length === 0) return toast(i18n('selectAtLeastOne'), 'error');
 
     confirmBtn.disabled = true;
     cancelBtn.disabled = true;
-    confirmBtn.textContent = 'Iniciando...';
+    confirmBtn.textContent = i18n('starting');
     try {
       await apiPost(`/torrents/selectFiles/${torrentId}`, { files: selected.join(',') });
-      toast('Arquivos selecionados!', 'success');
+      toast(i18n('filesSelected'), 'success');
       addIgnoreLock(torrentId);
       closeModal(true);
       fetchAll();
       browser.runtime.sendMessage('rd-check-now');
     } catch (err) {
-      toast('Falha ao iniciar o download', 'error');
+      toast(i18n('failedStart'), 'error');
       confirmBtn.disabled = false;
       cancelBtn.disabled = false;
-      confirmBtn.textContent = 'Iniciar Download';
+      confirmBtn.textContent = i18n('startDownload');
     }
   });
 
@@ -1816,7 +1833,7 @@ async function openFileSelectionModal(torrentId) {
   );
   
   const modalTitle = document.getElementById('modal-title');
-  if (modalTitle) modalTitle.textContent = 'Selecionar Arquivos';
+  if (modalTitle) modalTitle.textContent = i18n('selectFiles');
   const mBody = document.getElementById('modal-body');
   if (mBody) mBody.replaceChildren(newBody);
 }
@@ -1831,30 +1848,30 @@ function showWebLinkModal() {
     el('div', {className: 'form-group'},
       el('div', {className: 'form-label-row'},
         el('div', {className: 'form-label-left'},
-          el('label', {className: 'form-label'}, 'URL'),
-          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Cole links de servidores para desbloqueá-los.'))
+          el('label', {className: 'form-label'}, i18n('urlLabel')),
+          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, i18n('urlTooltip')))
         ),
         el('div', {className: 'form-label-icons'},
-          el('a', {href: 'https://real-debrid.com/compare', target: '_blank', className: 'hosters-link', title: 'Ver servidores suportados'}, compareSvg.cloneNode(true), 'Servidores suportados')
+          el('a', {href: 'https://real-debrid.com/compare', target: '_blank', className: 'hosters-link', title: i18n('supportedHosters')}, compareSvg.cloneNode(true), i18n('supportedHosters'))
         )
       ),
       el('textarea', {className: 'form-input', id: 'input-weblink', placeholder: 'https://1fichier.com/...\nhttps://rapidgator.net/...', rows: '5', spellcheck: 'false'})
     ),
-    el('button', {className: 'form-submit', id: 'submit-weblink'}, 'Desbloquear ', el('span', {className: 'btn-spinner'}))
+    el('button', {className: 'form-submit', id: 'submit-weblink'}, i18n('unlock'), el('span', {className: 'btn-spinner'}))
   );
 
-  openModalWithNode('Desbloquear Link', body);
+  openModalWithNode(i18n('unlockLink'), body);
 
   const urlInput = $('#input-weblink');
   const submitBtn = $('#submit-weblink');
 
   submitBtn.addEventListener('click', async () => {
     const urls = urlInput.value.split('\n').map(l => l.trim()).filter(l => l.startsWith('http://') || l.startsWith('https://'));
-    if (urls.length === 0) return toast('Insira pelo menos um URL válido', 'error');
+    if (urls.length === 0) return toast(i18n('insertValidUrl'), 'error');
 
     submitBtn.disabled = true;
     submitBtn.classList.add('loading');
-    submitBtn.replaceChildren('Desbloqueando...', el('span', {className: 'btn-spinner'}));
+    submitBtn.replaceChildren(i18n('unlocking'), el('span', {className: 'btn-spinner'}));
 
     try {
       const results = await Promise.allSettled(urls.map(url => apiPost('/unrestrict/link', { link: url })));
@@ -1868,24 +1885,24 @@ function showWebLinkModal() {
       if (succeeded.length > 0) await saveLocalDownloads(succeeded);
 
       if (failed === 0) {
-        toast(urls.length > 1 ? `${succeeded.length} links desbloqueados!` : 'Link desbloqueado!', 'success');
+        toast(urls.length > 1 ? `${succeeded.length} ${i18n('linksUnlocked')}` : i18n('linkUnlocked'), 'success');
         closeModal();
         fetchAll();
       } else if (succeeded.length === 0) {
-        toast('Falha em todos os links', 'error');
+        toast(i18n('allFailed'), 'error');
         submitBtn.disabled = false;
         submitBtn.classList.remove('loading');
-        submitBtn.replaceChildren('Desbloquear', el('span', {className: 'btn-spinner'}));
+        submitBtn.replaceChildren(i18n('unlock'), el('span', {className: 'btn-spinner'}));
       } else {
-        toast(`${succeeded.length} desbloqueados, ${failed} falharam`, 'error');
+        toast(`${succeeded.length} ${i18n('linksUnlocked').replace('!', '')}, ${failed} ${i18n('someFailed')}`, 'error');
         closeModal();
         fetchAll();
       }
     } catch (err) {
-      toast('Falha ao desbloquear o link', 'error');
+      toast(i18n('failedUnlock'), 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
-      submitBtn.replaceChildren('Desbloquear', el('span', {className: 'btn-spinner'}));
+      submitBtn.replaceChildren(i18n('unlock'), el('span', {className: 'btn-spinner'}));
     }
   });
 
@@ -1925,9 +1942,9 @@ function formatTimeAgo(dateStr) {
   const date = new Date(dateStr);
   if (isNaN(date)) return null;
   const diffDays = Math.floor(Math.abs(Date.now() - date.getTime()) / 86400000);
-  if (diffDays === 0) return 'agora mesmo';
-  if (diffDays === 1) return 'há 1d';
-  return `há ${diffDays}d`;
+  if (diffDays === 0) return i18n('justNow');
+  if (diffDays === 1) return `${i18n('agoDays')} 1d`;
+  return `${i18n('agoDays')} ${diffDays}d`;
 }
 
 function capitalize(str) {
@@ -1997,8 +2014,8 @@ async function updateBellFromDownloads(downloads) {
   const merged = [
     ...justCompleted.map(dl => ({
       id: `${dl.id}-${Date.now()}`,
-      title: 'Download Disponível',
-      message: dl.name || 'Um download foi concluído',
+      title: i18n('dlAvailable'),
+      message: dl.name || i18n('dlCompletedMsg'),
       type: dl._type,
       created_at: new Date().toISOString(),
       read: false,
@@ -2032,7 +2049,7 @@ function showNotificationsModal() {
     notifications.forEach(n => {
       const item = el('div', {className: 'notification-item unread'},
         el('div', {className: 'notification-header'},
-          el('span', {className: 'notification-title'}, n.title || 'Download Disponível'),
+          el('span', {className: 'notification-title'}, n.title || i18n('dlAvailable')),
           el('span', {className: 'notification-time'}, formatTimeAgo(n.created_at))
         ),
         el('div', {className: 'notification-message'}, n.message || '')
@@ -2048,7 +2065,7 @@ function showNotificationsModal() {
           item.remove();
           if (notifications.length === 0) {
             const list = $('#notifications-list');
-            if (list) list.replaceChildren(el('div', {className: 'notifications-empty'}, 'Nenhuma notificação'));
+            if (list) list.replaceChildren(el('div', {className: 'notifications-empty'}, i18n('noNotifications')));
             $('#btn-mark-all-read')?.remove();
           }
         }, 150);
@@ -2057,17 +2074,17 @@ function showNotificationsModal() {
     });
     bodyEl.appendChild(listEl);
   } else {
-    bodyEl.appendChild(el('div', {className: 'notifications-empty'}, 'Nenhuma notificação'));
+    bodyEl.appendChild(el('div', {className: 'notifications-empty'}, i18n('noNotifications')));
   }
 
-  openModalWithNode('Notificações', bodyEl);
+  openModalWithNode(i18n('notifications'), bodyEl);
 
   if (hasNotifications) {
     const modalHeader = $('.modal-header');
     const markAllBtn = document.createElement('button');
     markAllBtn.className = 'notifications-mark-all';
     markAllBtn.id = 'btn-mark-all-read';
-    markAllBtn.textContent = 'Limpar tudo';
+    markAllBtn.textContent = i18n('clearAll');
     modalHeader.insertBefore(markAllBtn, $('#modal-close'));
 
     markAllBtn.addEventListener('click', async () => {
@@ -2105,5 +2122,5 @@ async function clearAllNotifications() {
   await browser.storage.local.set({ rd_local_notifications: updated });
   notifications = [];
   updateNotificationBadge();
-  toast('Todas as notificações limpas', 'success');
+  toast(i18n('allCleared'), 'success');
 }

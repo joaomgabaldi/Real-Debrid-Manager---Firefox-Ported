@@ -2,6 +2,15 @@ const API_BASE = 'https://api.real-debrid.com/rest/1.0';
 const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
 const TIMEOUT_DEFAULT_MS = 10_000;
 
+const i18n = (key) => browser.i18n.getMessage(key) || key;
+
+function localizeHtmlPage() {
+  document.querySelectorAll('[data-i18n]').forEach(elem => {
+    const msg = browser.i18n.getMessage(elem.dataset.i18n);
+    if (msg) elem.textContent = msg;
+  });
+}
+
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -125,12 +134,13 @@ async function trackId(id) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  localizeHtmlPage();
   const { rd_theme } = await browser.storage.local.get('rd_theme');
   document.documentElement.setAttribute('data-theme', rd_theme || 'dark');
 
   const token = await getValidToken();
   if (!token) {
-    $('#content').replaceChildren(el('div', {className: 'state-message'}, 'Por favor, autentique-se na extensão principal primeiro.'));
+    $('#content').replaceChildren(el('div', {className: 'state-message'}, i18n('authFirst')));
     return;
   }
   renderAddForm();
@@ -144,19 +154,19 @@ function renderAddForm() {
     el('div', {className: 'form-group'},
       el('div', {className: 'form-label-row'},
         el('div', {className: 'form-label-left'},
-          el('label', {className: 'form-label'}, 'Link Magnet'),
-          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, 'Cole um link magnet ou faça upload de um arquivo .torrent.'))
+          el('label', {className: 'form-label'}, i18n('magnetLabel')),
+          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, i18n('magnetTooltip')))
         )
       ),
       el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'})
     ),
-    el('div', {className: 'form-divider'}, el('span', {}, 'ou')),
+    el('div', {className: 'form-divider'}, el('span', {}, i18n('or'))),
     el('div', {className: 'form-group'},
       el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent', style: 'display:none'}),
-      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), 'Selecionar arquivo .torrent'),
+      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), i18n('selectTorrentFile')),
       el('div', {className: 'form-file-name', id: 'selected-file-name'})
     ),
-    el('button', {className: 'form-submit', id: 'submit-torrent'}, 'Adicionar Torrent ', el('span', {className: 'btn-spinner'}))
+    el('button', {className: 'form-submit', id: 'submit-torrent'}, i18n('addBtn'), el('span', {className: 'btn-spinner'}))
   );
 
   $('#content').replaceChildren(form);
@@ -197,11 +207,11 @@ function renderAddForm() {
     const magnet = magnetInput.value.trim();
     const file = selectedFile;
 
-    if (!magnet && !file) return toast('Insira um link magnet ou selecione um arquivo', 'error');
+    if (!magnet && !file) return toast(i18n('insertMagnetOrFile'), 'error');
 
     submitBtn.disabled = true;
     submitBtn.classList.add('loading');
-    submitBtn.replaceChildren('Adicionando...', el('span', {className: 'btn-spinner'}));
+    submitBtn.replaceChildren(i18n('adding'), el('span', {className: 'btn-spinner'}));
 
     try {
       let torrentId = null;
@@ -222,14 +232,14 @@ function renderAddForm() {
 
       if (torrentId) {
         await trackId(String(torrentId));
-        toast('Adicionado! Verificando arquivos...', 'success');
+        toast(i18n('addedVerifying'), 'success');
         await handleFileSelection(torrentId);
       }
     } catch (err) {
-      toast('Falha ao adicionar torrent', 'error');
+      toast(i18n('failedAdd'), 'error');
       submitBtn.disabled = false;
       submitBtn.classList.remove('loading');
-      submitBtn.replaceChildren('Adicionar Torrent', el('span', {className: 'btn-spinner'}));
+      submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
     }
   });
 
@@ -239,7 +249,7 @@ function renderAddForm() {
 async function handleFileSelection(torrentId) {
   $('#content').replaceChildren(el('div', {className: 'state-message', style: 'padding: 40px 0;'},
     el('div', {className: 'spinner'}),
-    el('span', {style: 'margin-top: 10px; display: block;'}, 'Aguardando conversão...')
+    el('span', {style: 'margin-top: 10px; display: block;'}, i18n('waitingConversion'))
   ));
 
   let info;
@@ -254,20 +264,20 @@ async function handleFileSelection(torrentId) {
   }
 
   if (!info || info.status === 'error' || info.status === 'dead') {
-    toast('Erro ao processar torrent. Fechando...', 'error');
+    toast(i18n('errorProcessClose'), 'error');
     setTimeout(() => window.close(), 2500);
     return;
   }
 
   if (info.status !== 'waiting_files_selection') {
-    toast('Adicionado com sucesso!', 'success');
+    toast(i18n('addedSuccess'), 'success');
     browser.runtime.sendMessage('rd-check-now');
     setTimeout(() => window.close(), 1500);
     return;
   }
 
   if (!info.files || info.files.length === 0) {
-    toast('Nenhum arquivo encontrado.', 'error');
+    toast(i18n('noFiles'), 'error');
     setTimeout(() => window.close(), 2500);
     return;
   }
@@ -291,34 +301,34 @@ async function handleFileSelection(torrentId) {
 
   if (fileList.lastChild) fileList.lastChild.style.borderBottom = 'none';
 
-  const selectAllBtn = el('button', {className: 'action-btn ghost', style: 'margin-bottom: 10px; width: 100%; justify-content: center;'}, 'Selecionar Tudo / Inverter');
+  const selectAllBtn = el('button', {className: 'action-btn ghost', style: 'margin-bottom: 10px; width: 100%; justify-content: center;'}, i18n('selectAll'));
   selectAllBtn.addEventListener('click', () => {
     const allChecked = checkboxes.every(c => c.checked);
     checkboxes.forEach(c => c.checked = !allChecked);
   });
 
-  const confirmBtn = el('button', {className: 'form-submit', style: 'width: 100%; margin-top: 10px;'}, 'Iniciar Download');
+  const confirmBtn = el('button', {className: 'form-submit', style: 'width: 100%; margin-top: 10px;'}, i18n('startDownload'));
 
   confirmBtn.addEventListener('click', async () => {
     const selected = checkboxes.filter(c => c.checked).map(c => c.value);
-    if (selected.length === 0) return toast('Selecione pelo menos um arquivo', 'error');
+    if (selected.length === 0) return toast(i18n('selectAtLeastOne'), 'error');
 
     confirmBtn.disabled = true;
-    confirmBtn.textContent = 'Iniciando...';
+    confirmBtn.textContent = i18n('starting');
     try {
       await apiPost(`/torrents/selectFiles/${torrentId}`, { files: selected.join(',') });
-      toast('Arquivos selecionados! Fechando...', 'success');
+      toast(i18n('filesSelectedClose'), 'success');
       browser.runtime.sendMessage('rd-check-now');
       setTimeout(() => window.close(), 1500); 
     } catch (err) {
-      toast('Falha ao iniciar o download', 'error');
+      toast(i18n('failedStart'), 'error');
       confirmBtn.disabled = false;
-      confirmBtn.textContent = 'Iniciar Download';
+      confirmBtn.textContent = i18n('startDownload');
     }
   });
 
   $('#content').replaceChildren(el('div', {},
-    el('div', {style: 'font-weight: 600; margin-bottom: 10px;'}, 'Selecione os arquivos para baixar:'),
+    el('div', {style: 'font-weight: 600; margin-bottom: 10px;'}, i18n('selectFilesToDl')),
     selectAllBtn,
     fileList,
     confirmBtn

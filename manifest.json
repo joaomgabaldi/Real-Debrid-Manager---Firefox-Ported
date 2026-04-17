@@ -1,8 +1,9 @@
 {
    "manifest_version": 3,
-   "name": "RD Manager",
+   "name": "__MSG_extName__",
+   "default_locale": "pt_BR",
    "version": "1.0.1",
-   "description": "Gerencie todos os seus downloads do Real-Debrid em uma janela simples.",
+   "description": "__MSG_extDesc__",
    "browser_specific_settings": {
       "gecko": {
          "id": "{4b8c9d1e-2f3a-4e5d-b6c7-8a9b0c1d2e4f}",
