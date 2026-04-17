@@ -1,5 +1,5 @@
-const API_BASE = 'https://api.real-debrid.com/rest/1.0';
-const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
+import { API_BASE, getValidToken, apiGet, trackId, fetchWithTimeout } from './api.js';
+
 const ALARM_NAME = 'rd-completion-check';
 const POLL_INTERVAL_MINUTES = 1;
 const DEFAULT_BADGE_COLOR = '#1a9c4a';
@@ -51,43 +51,6 @@ browser.runtime.onMessage.addListener((msg) => {
   }
 });
 
-async function getValidToken() {
-  const data = await browser.storage.local.get(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at']);
-  if (!data.rd_access_token) return null;
-
-  if (Date.now() > data.rd_token_expires_at - 60000) {
-    try {
-      const res = await fetch(`${OAUTH_BASE}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: data.rd_oauth_client_id,
-          client_secret: data.rd_oauth_client_secret,
-          code: data.rd_refresh_token,
-          grant_type: 'http://oauth.net/grant_type/device/1.0'
-        }).toString()
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403 || res.status === 400) {
-          await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
-        }
-        return null;
-      }
-      const tokenData = await res.json();
-      const newExpiry = Date.now() + (tokenData.expires_in * 1000);
-      await browser.storage.local.set({
-        rd_access_token: tokenData.access_token,
-        rd_refresh_token: tokenData.refresh_token,
-        rd_token_expires_at: newExpiry
-      });
-      return tokenData.access_token;
-    } catch (_) {
-      return null;
-    }
-  }
-  return data.rd_access_token;
-}
-
 async function deleteTorrentsSequentially(ids) {
   const token = await getValidToken();
   if (!token) return;
@@ -119,7 +82,7 @@ async function checkForCompletedDownloads() {
     const trackedIds = new Set(rd_tracked_ids || []);
     if (trackedIds.size === 0) return;
 
-    const torrents = await apiFetch(token, '/torrents');
+    const torrents = await apiGet('/torrents');
     const current = [];
     if (Array.isArray(torrents)) {
       torrents.forEach(t => current.push({ id: String(t.id), name: t.filename, type: 'torrent', ready: isReady(t) }));
@@ -207,9 +170,7 @@ async function addMagnet(token, magnet) {
     throw new Error(`API error (${res.status})`);
   }
   const data = await res.json();
-  if (data.id) {
-    await trackId(String(data.id));
-  }
+  if (data.id) await trackId(String(data.id));
 }
 
 async function addTorrentFile(token, url) {
@@ -226,9 +187,7 @@ async function addTorrentFile(token, url) {
     throw new Error(`API error (${res.status})`);
   }
   const data = await res.json();
-  if (data.id) {
-    await trackId(String(data.id));
-  }
+  if (data.id) await trackId(String(data.id));
 }
 
 async function unrestrictLink(token, link) {
@@ -267,33 +226,6 @@ async function unrestrictLink(token, link) {
     await browser.storage.local.set({ rd_local_downloads: merged });
     await trackId(String(entry.id));
   }
-}
-
-async function trackId(id) {
-  const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
-  const tracked = new Set(rd_tracked_ids || []);
-  tracked.add(id);
-  await browser.storage.local.set({ rd_tracked_ids: [...tracked] });
-}
-
-const TIMEOUT_MS = 10_000;
-
-function fetchWithTimeout(url, options = {}, timeoutMs = TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
-}
-
-async function apiFetch(token, path) {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  if (!res.ok) {
-    if (res.status === 401 || res.status === 403) await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
-    throw new Error(`API error (${res.status})`);
-  }
-  return res.json();
 }
 
 function isReady(dl) {
