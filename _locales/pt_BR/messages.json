@@ -13,7 +13,7 @@
   "moreThan1Day": { "message": "Mais de 1 dia" },
   "moreThan1Week": { "message": "Mais de 1 semana" },
   "moreThan1Month": { "message": "Mais de 1 mês" },
-  "clearFilter": { "message": "Limpiar filtro" },
+  "clearFilter": { "message": "Limpar filtro" },
   "tabAll": { "message": "Todos" },
   "tabActive": { "message": "Ativos" },
   "tabCompleted": { "message": "Concluídos" },
