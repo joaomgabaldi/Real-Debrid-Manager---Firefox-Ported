@@ -1,7 +1,7 @@
 {
   "extName": { "message": "RD Manager" },
   "extDesc": { "message": "Gerencie todos os seus downloads do Real-Debrid em uma janela simples." },
-  "panelTitle": { "message": "Abrir Painel do Real-Debrid" },
+  "panelTitle": { "message": "Ir para real-debrid.com" },
   "settings": { "message": "Configurações" },
   "toggleTheme": { "message": "Alternar tema" },
   "notifications": { "message": "Notificações" },
