@@ -1,7 +1,7 @@
 {
   "extName": { "message": "RD Manager" },
   "extDesc": { "message": "Manage all your Real-Debrid downloads in a simple window." },
-  "panelTitle": { "message": "Open Real-Debrid Panel" },
+  "panelTitle": { "message": "Go to real-debrid.com" },
   "settings": { "message": "Settings" },
   "toggleTheme": { "message": "Toggle theme" },
   "notifications": { "message": "Notifications" },
@@ -127,4 +127,5 @@
   "predicted": { "message": "Predicted" },
   "noPrediction": { "message": "No prediction" },
   "fetchingDownloadsFailed": { "message": "Failed to fetch downloads" }
+}
 }
