@@ -3,10 +3,14 @@ name: Build and Release Extension
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Nova versão da extensão (ex: 1.0.1)'
+      bump_type:
+        description: 'Tipo de incremento (patch: 1.0.x, minor: 1.x.0, major: x.0.0)'
         required: true
-        type: string
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
@@ -22,26 +26,56 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Calcular nova versão
+        id: calc_version
+        run: |
+          CURRENT_VERSION=$(jq -r '.version' manifest.json)
+          IFS='.' read -ra VER <<< "$CURRENT_VERSION"
+          
+          # Caso o manifest tenha uma versão mal formatada, garante valores padrão
+          MAJOR="${VER[0]:-0}"
+          MINOR="${VER[1]:-0}"
+          PATCH="${VER[2]:-0}"
+          
+          if [ "${{ github.event.inputs.bump_type }}" == "major" ]; then
+            MAJOR=$((MAJOR+1))
+            MINOR=0
+            PATCH=0
+          elif [ "${{ github.event.inputs.bump_type }}" == "minor" ]; then
+            MINOR=$((MINOR+1))
+            PATCH=0
+          else
+            PATCH=$((PATCH+1))
+          fi
+          
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          
+          echo "Versão anterior detectada: $CURRENT_VERSION"
+          echo "Nova versão calculada: $NEW_VERSION"
+          
+          # Salva a nova versão nas variáveis de ambiente do workflow
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
       - name: Update manifest.json version
         run: |
-          jq '.version = "${{ github.event.inputs.version }}"' manifest.json > manifest_tmp.json && mv manifest_tmp.json manifest.json
+          jq '.version = "${{ env.NEW_VERSION }}"' manifest.json > manifest_tmp.json && mv manifest_tmp.json manifest.json
 
       - name: Commit and Push updated manifest
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git commit -am "chore: atualiza versão do manifest para ${{ github.event.inputs.version }}" || echo "Nenhuma mudança no manifest"
+          git commit -am "chore: atualiza versão do manifest para ${{ env.NEW_VERSION }}" || echo "Nenhuma mudança no manifest"
           git push
 
       - name: Create ZIP archive
         run: |
-          zip -r release-${{ github.event.inputs.version }}.zip . -x "README.md" -x ".git/*" -x ".github/*"
+          zip -r release-${{ env.NEW_VERSION }}.zip . -x "README.md" -x ".git/*" -x ".github/*"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Release v${{ github.event.inputs.version }}
-          files: release-${{ github.event.inputs.version }}.zip
+          tag_name: v${{ env.NEW_VERSION }}
+          name: Release v${{ env.NEW_VERSION }}
+          files: release-${{ env.NEW_VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
