@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   onAuthFailure(() => forceLogout());
   
-  // Escutar eventos de falha de autenticação emitidos pelo background.js
   browser.runtime.onMessage.addListener((msg) => {
     if (msg && msg.action === 'force_logout') {
       forceLogout();
@@ -150,7 +149,9 @@ function stopAutoRefresh() {
 function scheduleNextRefresh() {
   let delay = Math.min(MAX_REFRESH_MS, BASE_REFRESH_MS * Math.pow(1.5, refreshDecayCount));
   if (allDownloads.some(d => d.download_state === 'processing' || d.download_state === 'waiting_selection')) {
-    delay = Math.min(delay, 5000);
+    if (refreshDecayCount < 20) {
+      delay = Math.min(delay, 5000);
+    }
   }
 
   autoRefreshTimer = setTimeout(async () => {
@@ -1328,7 +1329,8 @@ function openModalWithNode(title, bodyNode, locked = false) {
 }
 
 function initFixedTooltips() {
-  document.querySelectorAll('.info-icon').forEach(icon => {
+  document.querySelectorAll('.info-icon:not(.tooltip-inited)').forEach(icon => {
+    icon.classList.add('tooltip-inited');
     const tip = icon.querySelector('.info-tooltip');
     if (!tip) return;
     icon.addEventListener('mouseenter', () => {
