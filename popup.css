@@ -154,15 +154,21 @@ body {
 }
 
 .logo-icon {
-  font-size: 1.7rem;
-  font-weight: 900;
-  line-height: 1;
   color: var(--accent);
   flex-shrink: 0;
-  -webkit-text-stroke: 0.7px currentColor;
   cursor: pointer;
   transition: opacity .15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.logo-icon svg {
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+
 .logo-icon:hover {
   opacity: .75;
 }
