@@ -1,4 +1,4 @@
-export const i18n = (key) => browser.i18n.getMessage(key) || key;
+export const i18n = (key, substitutions) => browser.i18n.getMessage(key, substitutions) || key;
 
 export function localizeHtmlPage() {
   document.querySelectorAll('[data-i18n]').forEach(elem => {
