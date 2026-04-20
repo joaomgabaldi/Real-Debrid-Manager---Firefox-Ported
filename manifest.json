@@ -1,39 +1,52 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "1.0.0",
-  "description": "__MSG_extDesc__",
   "default_locale": "en",
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+  "version": "1.2.1",
+  "description": "__MSG_extDesc__",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{4b8c9d1e-2f3a-4e5d-b6c7-8a9b0c1d2e4f}",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://api.real-debrid.com/*",
+    "http://127.0.0.1:9666/*",
+    "https://cable.ayra.ch/*"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_popup": "popup.html"
   },
-  "background": {
-    "scripts": ["background.js"],
-    "type": "module"
-  },
-  "permissions": [
-    "storage",
-    "alarms",
-    "notifications",
-    "contextMenus",
-    "downloads"
-  ],
-  "host_permissions": [
-    "https://api.real-debrid.com/*"
-  ],
-  "optional_host_permissions": [
-    "<all_urls>"
-  ]
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }
