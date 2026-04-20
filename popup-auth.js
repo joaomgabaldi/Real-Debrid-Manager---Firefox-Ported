@@ -87,11 +87,11 @@ export function showAuthModal(autoStartOauth = false) {
             el('input', {type: 'checkbox', id: 'toggle-jd2', checked: jd2Enabled ? 'checked' : null}),
             el('span', {className: 'toggle-slider'})
           )
-        ),
-        el('div', {id: 'jd-port-container', style: jd2Enabled ? 'margin-top: 10px; display: block;' : 'display: none;'},
-          el('label', {className: 'form-label', style: 'margin-bottom:2px; font-size: 12px;'}, i18n('jdPortLabel')),
-          el('input', {type: 'number', id: 'input-jd-port', className: 'form-input', value: jdPortValue, style: 'margin-top: 5px;'})
         )
+      ),
+      el('div', {id: 'jd-port-container', className: 'form-group', style: jd2Enabled ? 'display: block;' : 'display: none;'},
+        el('label', {className: 'form-label'}, i18n('jdPortLabel')),
+        el('input', {type: 'number', id: 'input-jd-port', className: 'form-input', value: jdPortValue})
       ),
       el('div', {className: 'settings-account-section', id: 'settings-account-area'}, authSection)
     );
