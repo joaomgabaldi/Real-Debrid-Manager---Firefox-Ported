@@ -14,7 +14,7 @@ function triggerAuthFailure() {
 
 function handleUnauth(res) {
   if (res.status === 401 || res.status === 403) {
-    browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
+    browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
     triggerAuthFailure();
     throw new Error('Unauthenticated');
   }
@@ -48,7 +48,7 @@ async function refreshAccessToken(refreshToken, clientId, clientSecret) {
     });
 
     if (!res.ok) {
-      await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token']);
+      await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
       triggerAuthFailure();
       return null;
     }
