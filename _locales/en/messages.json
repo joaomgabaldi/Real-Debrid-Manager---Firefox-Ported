@@ -139,6 +139,13 @@
   "predicted": { "message": "Predicted" },
   "noPrediction": { "message": "No prediction" },
   "fetchingDownloadsFailed": { "message": "Failed to fetch downloads" },
-  "addBtn": { "message": "Add" },
-  "noFiles": { "message": "No files found." }
+  "verifyingAuth": { "message": "Verifying authorization..." },
+  "multipleLinksExpand": { "message": "Multiple files detected. Expand the item to choose what to download." },
+  "clearAll": { "message": "Clear all" },
+  "allCleared": { "message": "All notifications cleared." },
+  "urlTooltip": { "message": "Paste one or more links here to unrestrict them." },
+  "magnetTooltip": { "message": "Paste a magnet link or select a .torrent file below." },
+  "dlNotificationsInfo": { "message": "Notifications depend on download tracking being enabled." },
+  "dayRemaining": { "message": "day remaining" },
+  "predicted": { "message": "remaining (predicted)" }
 }
