@@ -118,12 +118,13 @@ export async function fetchAll(isBackgroundSync = false) {
     const limit = 100;
     let hasMore = true;
     let latestCachedDate = 0;
+    const MAX_PAGES = 10;
     
     if (isBackgroundSync && state.allDownloads.length > 0) {
       latestCachedDate = new Date(state.allDownloads[0].created_at || 0).getTime();
     }
 
-    while (hasMore) {
+    while (hasMore && page <= MAX_PAGES) {
       const res = await apiGet(`/torrents?limit=${limit}&page=${page}`);
       if (Array.isArray(res) && res.length > 0) {
         torrentsRes.push(...res);
@@ -920,10 +921,14 @@ export async function deleteAllVisible() {
   if (state.currentTypeFilter) targets = targets.filter(d => d._type === state.currentTypeFilter);
   if (targets.length === 0) return;
 
+  const targetIds = new Set(targets.map(d => String(d.id)));
+
   document.querySelectorAll('.dl-item').forEach(e => {
-    e.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
-    e.style.opacity = '0';
-    e.style.transform = 'translateX(-10px)';
+    if (targetIds.has(e.dataset.id)) {
+      e.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
+      e.style.opacity = '0';
+      e.style.transform = 'translateX(-10px)';
+    }
   });
   
   setTimeout(() => {
@@ -965,15 +970,27 @@ export async function downloadFile(type, id) {
     }
 
     if (type === 'torrent') {
-      toast(i18n('startingDownload'), 'success');
       let links = dl?.links || [];
       if (links.length === 0) {
         const info = await apiGet(`/torrents/info/${id}`);
         links = info?.links || [];
       }
 
+      if (links.length > 1) {
+        toast(i18n('multipleLinksExpand') || 'Múltiplos ficheiros. Expanda o item para descarregar.', 'info');
+        const itemElement = globals.dlElementMap.get(String(id));
+        if (itemElement && !itemElement.classList.contains('expanded')) {
+          itemElement.classList.add('expanded');
+          if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
+            fetchTorrentFiles(dl, itemElement);
+          }
+        }
+        return;
+      }
+
       if (links.length > 0) {
-        const unrestricted = await apiPost('/unrestrict/link', { link: links[0] }, false, 10000);
+        toast(i18n('startingDownload'), 'success');
+        const unrestricted = await apiPost('/unrestrict/link', { link: links[0] });
         if (unrestricted?.download) triggerDownload(unrestricted.download, dl.name);
         else toast(i18n('failedDlLink'), 'error');
       } else {
