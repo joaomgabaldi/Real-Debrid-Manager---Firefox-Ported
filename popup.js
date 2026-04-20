@@ -111,6 +111,13 @@ function cacheData(downloads) {
     }
     return true;
   });
+
+  cleaned.sort((a, b) => {
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    return dateB - dateA;
+  });
+
   if (cleaned.length > 1000) {
     cleaned = cleaned.slice(0, 1000);
   }
