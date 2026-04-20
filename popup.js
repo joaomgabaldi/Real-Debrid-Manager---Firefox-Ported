@@ -4,7 +4,7 @@ import { rdStorage } from './storage.js';
 import { i18n, localizeHtmlPage } from './utils.js';
 import { showAuthModal, forceLogout, pollDeviceCredentials } from './popup-auth.js';
 import { loadLocalNotifications, showNotificationsModal } from './popup-notifications.js';
-import { fetchAll, fetchUserInfo, renderDownloads, refreshInBackground, enforceSelectionLock, stopAutoRefresh, showState, deleteAllVisible, showWebLinkModal, downloadFile, deleteDownload, fetchTorrentFiles, openFileSelectionModal, isCompleted } from './popup-downloads.js';
+import { fetchAll, fetchUserInfo, renderDownloads, refreshInBackground, enforceSelectionLock, stopAutoRefresh, showState, deleteAllVisible, showWebLinkModal, downloadFile, deleteDownload, fetchTorrentFiles, openFileSelectionModal, isCompleted, showUserBar, updateAgeFilterUI } from './popup-downloads.js';
 import { closeModal } from './popup-modals.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -56,7 +56,7 @@ async function bootExtension() {
     }
     
     if (data.rd_cached_user) {
-      import('./popup-downloads.js').then(m => m.showUserBar(data.rd_cached_user));
+      showUserBar(data.rd_cached_user);
     }
     
     await loadLocalNotifications();
@@ -214,7 +214,7 @@ function bindEvents() {
   DOM.$$('.age-filter-option').forEach(opt => {
     opt.addEventListener('click', () => {
       state.ageFilterDays = opt.dataset.age ? parseInt(opt.dataset.age) : null;
-      import('./popup-downloads.js').then(m => m.updateAgeFilterUI());
+      updateAgeFilterUI();
       ageMenu.classList.add('hidden');
       ageBtn.classList.remove('open');
       state.visibleCount = 50;
