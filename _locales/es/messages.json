@@ -164,5 +164,8 @@
   "defaultStreamName": { "message": "RD Stream" },
   "downloadNameFallback": { "message": "Descarga" },
   "dropSubtitleHere": { "message": "Suelta el subtítulo aquí (.SRT o .VTT)" },
-  "errorInvalidSubtitleFormat": { "message": "Formato no válido. Por favor, utiliza un archivo .SRT o .VTT." }
+  "errorInvalidSubtitleFormat": { "message": "Formato no válido. Por favor, utiliza un archivo .SRT o .VTT." },
+  "checkingCache": { "message": "Comprobando disponibilidad..." },
+  "cachedInstant": { "message": "100% en Caché (Inmediato)" },
+  "notCached": { "message": "No está en caché (Requiere descarga)" }
 }
