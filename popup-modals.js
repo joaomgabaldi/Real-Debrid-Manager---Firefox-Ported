@@ -1,4 +1,5 @@
 import { DOM, globals, state } from './popup-state.js';
+import { initFixedTooltips } from './utils.js';
 
 let lastActiveElement = null;
 
@@ -40,30 +41,4 @@ export function closeModal(force = false) {
     lastActiveElement.focus();
     lastActiveElement = null;
   }
-}
-
-export function initFixedTooltips() {
-  document.querySelectorAll('.info-icon:not(.tooltip-inited)').forEach(icon => {
-    icon.classList.add('tooltip-inited');
-    const tip = icon.querySelector('.info-tooltip');
-    if (!tip) return;
-    icon.addEventListener('mouseenter', () => {
-      const modal = document.querySelector('#modal');
-      const iconRect = icon.getBoundingClientRect();
-      const modalRect = modal ? modal.getBoundingClientRect() : document.body.getBoundingClientRect();
-      tip.style.position = 'fixed';
-      tip.style.visibility = 'hidden';
-      tip.classList.add('visible');
-      const tipWidth = tip.offsetWidth;
-      tip.style.visibility = '';
-      tip.style.left = `${modalRect.left + (modalRect.width - tipWidth) / 2}px`;
-      tip.style.top = `${iconRect.bottom + 6}px`;
-    });
-    icon.addEventListener('mouseleave', () => {
-      tip.classList.remove('visible');
-      tip.style.position = '';
-      tip.style.left = '';
-      tip.style.top = '';
-    });
-  });
 }
