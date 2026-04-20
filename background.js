@@ -10,12 +10,12 @@ onAuthFailure(() => {
 });
 
 browser.runtime.onInstalled.addListener(async () => {
-  scheduleAlarm();
+  await scheduleAlarm();
   updateContextMenu();
 });
 
-browser.runtime.onStartup.addListener(() => {
-  scheduleAlarm();
+browser.runtime.onStartup.addListener(async () => {
+  await scheduleAlarm();
   updateContextMenu();
   checkForCompletedDownloads();
 });
@@ -41,12 +41,9 @@ browser.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-function scheduleAlarm() {
-  browser.alarms.get(ALARM_NAME).then((existing) => {
-    if (!existing) {
-      browser.alarms.create(ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
-    }
-  });
+async function scheduleAlarm() {
+  await browser.alarms.clear(ALARM_NAME);
+  browser.alarms.create(ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
 }
 
 browser.runtime.onMessage.addListener((msg) => {
@@ -83,36 +80,53 @@ async function checkForCompletedDownloads() {
     const trackedIds = new Set(rd_tracked_ids || []);
     if (trackedIds.size === 0) return;
 
-    const torrents = await apiGet('/torrents', 10000);
     const current = [];
-    if (Array.isArray(torrents)) {
-      torrents.forEach(t => current.push({ id: String(t.id), name: t.filename, type: 'torrent', ready: isReady(t) }));
-    }
 
     const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
     if (Array.isArray(rd_local_downloads)) {
-      rd_local_downloads.forEach(d => current.push({ id: String(d.id), name: d.name, type: 'web', ready: true }));
+      rd_local_downloads.forEach(d => current.push({ id: String(d.id), name: d.name, type: 'web', ready: true, status: 'downloaded' }));
+    }
+
+    for (const id of trackedIds) {
+      if (String(id).startsWith('web-')) continue;
+      try {
+        const t = await apiGet(`/torrents/info/${id}`, 10000);
+        if (t) current.push({ id: String(t.id), name: t.filename, type: 'torrent', ready: isReady(t), status: t.status });
+      } catch (err) {
+        if (err.message && (err.message.includes('404') || err.message.includes('Error: 404'))) {
+          trackedIds.delete(id);
+        }
+      }
     }
 
     const justCompleted = current.filter(dl => dl.ready && trackedIds.has(dl.id));
-    if (justCompleted.length === 0) return;
+    
+    if (justCompleted.length === 0) {
+      await browser.storage.local.set({ rd_tracked_ids: [...trackedIds] });
+      return;
+    }
 
     justCompleted.forEach(dl => trackedIds.delete(dl.id));
     await browser.storage.local.set({ rd_tracked_ids: [...trackedIds] });
 
     const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
     const existing = rd_local_notifications || [];
+    
     const merged = [
-      ...justCompleted.map(dl => ({
-        id: `${dl.id}-${Date.now()}`,
-        title: browser.i18n.getMessage('dlAvailable') || 'Download Disponível',
-        message: dl.name || browser.i18n.getMessage('dlCompletedMsg') || 'Um download foi concluído',
-        type: dl.type,
-        created_at: new Date().toISOString(),
-        read: false,
-      })),
+      ...justCompleted.map(dl => {
+        const isError = ['error', 'dead', 'virus', 'magnet_error'].includes((dl.status || '').toLowerCase());
+        return {
+          id: `${dl.id}-${Date.now()}`,
+          title: isError ? 'Falha no Download' : (browser.i18n.getMessage('dlAvailable') || 'Download Disponível'),
+          message: dl.name || (isError ? 'Ocorreu um erro no ficheiro.' : (browser.i18n.getMessage('dlCompletedMsg') || 'Um download foi concluído')),
+          type: dl.type,
+          created_at: new Date().toISOString(),
+          read: false,
+        };
+      }),
       ...existing,
     ].slice(0, 99);
+    
     await browser.storage.local.set({ rd_local_notifications: merged });
     await updateBadgeCount();
 
@@ -219,7 +233,8 @@ async function unrestrictLink(link) {
 }
 
 function isReady(dl) {
-  return (dl.status || '').toLowerCase() === 'downloaded';
+  const s = (dl.status || '').toLowerCase();
+  return ['downloaded', 'error', 'dead', 'virus', 'magnet_error'].includes(s);
 }
 
 async function updateBadgeCount() {
