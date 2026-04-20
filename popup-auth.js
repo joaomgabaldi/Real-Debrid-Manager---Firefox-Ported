@@ -94,7 +94,6 @@ export function showAuthModal(autoStartOauth = false) {
       )
     ];
 
-    // Renderiza JD2 e VLC apenas se o usuário estiver logado (evita quebrar a tela de login)
     if (state.hasValidToken) {
       bodyChildren.push(
         el('div', {className: 'form-group'},
