@@ -39,7 +39,8 @@ function toggleSelectionMode(force) {
         DOM.$('#btn-cancel-select').classList.remove('hidden');
     } else {
         if(delSpan) {
-            delSpan.textContent = i18n('delete');
+            delSpan.textContent = i18n('deleteAll');
+            delSpan.setAttribute('data-i18n', 'deleteAll');
         }
         DOM.$('#btn-delete-all').classList.remove('active-mode');
         DOM.$$('.tab[data-tab]').forEach(t => t.classList.remove('hidden'));
