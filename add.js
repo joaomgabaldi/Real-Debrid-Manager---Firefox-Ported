@@ -1,11 +1,12 @@
 import { getValidToken, apiGet, apiPost, apiPut, trackId, onAuthFailure } from './api.js';
 import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast, initFixedTooltips } from './utils.js';
+import { rdStorage } from './storage.js';
 
 const $ = (sel) => document.querySelector(sel);
 
 document.addEventListener('DOMContentLoaded', async () => {
   localizeHtmlPage();
-  const { rd_theme } = await browser.storage.local.get('rd_theme');
+  const { rd_theme } = await rdStorage.get('rd_theme');
   document.documentElement.setAttribute('data-theme', rd_theme || 'dark');
 
   onAuthFailure(() => {
