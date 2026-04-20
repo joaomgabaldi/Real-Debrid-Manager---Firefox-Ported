@@ -72,7 +72,7 @@
   "jd2Label": { "message": "Enviar para o JDownloader 2" },
   "jd2Desc": { "message": "Envia links para a porta 9666. O JD2 precisa estar aberto." },
   "jdPortLabel": { "message": "Porta do JDownloader" },
-  "vlcLabel": { "message": "Abrir no VLC (via M3U)" },
+  "vlcLabel": { "message": "Exportar como M3U" },
   "vlcDesc": { "message": "Baixa um arquivo .m3u que abre automaticamente no VLC ou no seu player padrão." },
   "sendingToVlc": { "message": "Gerando arquivo VLC..." },
   "points": { "message": "Pontos de Fidelidade" },
