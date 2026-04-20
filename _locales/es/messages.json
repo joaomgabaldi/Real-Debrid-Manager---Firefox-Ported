@@ -136,7 +136,7 @@
   "errorProcessClose": { "message": "Error al procesar el torrent. Cerrando..." },
   "addedSuccess": { "message": "¡Añadido con éxito!" },
   "selectFilesToDl": { "message": "Selecciona los archivos para descargar:" },
-  "authFirst": { "message": "Por favor, autentícate en la extensão principal primero." },
+  "authFirst": { "message": "Por favor, autentícate en la extensión principal primero." },
   "addedAt": { "message": "añadido" },
   "noPrediction": { "message": "Sin predicción" },
   "fetchingDownloadsFailed": { "message": "Error al obtener descargas" },
