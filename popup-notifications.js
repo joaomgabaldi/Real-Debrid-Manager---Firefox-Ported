@@ -126,7 +126,7 @@ export async function updateNotificationBadge() {
   }
 }
 
-export async function clearNotification(id) {
+async function clearNotification(id) {
   const allNotifications = await rdStorage.getLocalNotifications();
   const updated = allNotifications.map(n => n.id === id ? { ...n, read: true } : n);
   await rdStorage.saveLocalNotifications(updated);
@@ -134,7 +134,7 @@ export async function clearNotification(id) {
   updateNotificationBadge();
 }
 
-export async function clearAllNotifications() {
+async function clearAllNotifications() {
   const allNotifications = await rdStorage.getLocalNotifications();
   const updated = allNotifications.map(n => ({ ...n, read: true }));
   await rdStorage.saveLocalNotifications(updated);
