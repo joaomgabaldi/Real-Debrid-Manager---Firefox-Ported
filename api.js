@@ -165,13 +165,18 @@ export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeo
   }
 }
 
-export async function apiPut(endpoint, blobData) {
+export async function apiPut(endpoint, blobData, contentType = null) {
   const token = await getValidToken();
   if (!token) throw new Error('Unauthenticated');
 
+  const headers = { 'Authorization': `Bearer ${token}` };
+  if (contentType) {
+    headers['Content-Type'] = contentType;
+  }
+
   const res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, {
     method: 'PUT',
-    headers: { 'Authorization': `Bearer ${token}` },
+    headers: headers,
     body: blobData
   });
 
