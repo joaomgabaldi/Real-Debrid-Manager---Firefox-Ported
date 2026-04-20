@@ -121,8 +121,8 @@ html {
 
 body {
   width: 430px;
-  min-height: 400px;
-  max-height: 550px;
+  min-height: 500px;
+  max-height: 600px;
   font-family: var(--font-main);
   background: var(--bg-base);
   color: var(--text);
@@ -961,7 +961,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   width: 370px;
-  max-height: 510px;
+  max-height: 580px;
   overflow: hidden;
   box-shadow: var(--shadow-lg);
   animation: slideUp .2s ease;
