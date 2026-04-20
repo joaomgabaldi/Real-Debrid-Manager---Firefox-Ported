@@ -186,20 +186,20 @@ function renderDecodedLinks(links) {
   });
 
   const copyBtn = el('button', {
-    className: 'action-btn ghost',
-    style: 'width: 100%; justify-content: center; font-weight: 600;'
+    className: 'form-submit',
+    style: 'width: 100%; justify-content: center; background: #5AD58A; color: #000; font-weight: 700; border: none; font-size: 13px;'
   }, i18n('copyAllLinks'));
 
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(links.join('\n')).then(() => {
       toast(i18n('copySuccess'), 'success');
+      setTimeout(() => window.close(), 1500);
     });
   });
 
-  // Botão verde estilizado de acordo com o padrão primário (sucesso) da extensão
   const jdBtn = el('button', {
-    className: 'action-btn',
-    style: 'width: 100%; justify-content: center; font-weight: 600; background: #1a9c4a; color: #fff; border: none;'
+    className: 'form-submit',
+    style: 'width: 100%; justify-content: center; background: #5AD58A; color: #000; font-weight: 700; border: none; font-size: 13px;'
   }, i18n('exportJd2'));
 
   jdBtn.addEventListener('click', async () => {
@@ -213,13 +213,13 @@ function renderDecodedLinks(links) {
       const urlString = encodeURIComponent(links.join('\r\n'));
       const jdUrl = `http://127.0.0.1:${port}/flash/add?source=RDManager&urls=${urlString}`;
 
-      // A requisição usa mode: no-cors para evitar falhas do navegador ao contatar o localhost
       await fetch(jdUrl, { mode: 'no-cors' });
       toast(i18n('addedToJd'), 'success');
+      // Adicionado atraso para permitir que a notificação apareça antes da janela fechar
+      setTimeout(() => window.close(), 1500); 
     } catch (err) {
       console.warn('RD Manager: Erro ao enviar para JD', err);
       toast(i18n('jdUnresponsive'), 'error');
-    } finally {
       jdBtn.disabled = false;
       jdBtn.style.opacity = '1';
     }
