@@ -7,25 +7,19 @@ export function localizeHtmlPage() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.getAttribute('data-i18n');
     const msg = browser.i18n.getMessage(key);
-    if (msg) {
-      el.textContent = msg;
-    }
+    if (msg) el.textContent = msg;
   });
 
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     const key = el.getAttribute('data-i18n-placeholder');
     const msg = browser.i18n.getMessage(key);
-    if (msg) {
-      el.placeholder = msg;
-    }
+    if (msg) el.placeholder = msg;
   });
 
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     const key = el.getAttribute('data-i18n-title');
     const msg = browser.i18n.getMessage(key);
-    if (msg) {
-      el.title = msg;
-    }
+    if (msg) el.title = msg;
   });
 }
 
@@ -38,6 +32,10 @@ export function formatBytes(bytes, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+/**
+ * Cria elementos DOM de forma declarativa.
+ * Suporta event listeners se a chave começar com 'on' e o valor for uma função.
+ */
 export function el(tag, attributes = {}, ...children) {
   const element = document.createElement(tag);
   for (const key in attributes) {
@@ -45,6 +43,9 @@ export function el(tag, attributes = {}, ...children) {
       element.className = attributes[key];
     } else if (key === 'style') {
       element.style.cssText = attributes[key];
+    } else if (key.startsWith('on') && typeof attributes[key] === 'function') {
+      // Suporte a event listeners (ex: onclick: () => ...)
+      element.addEventListener(key.toLowerCase().substring(2), attributes[key]);
     } else if (attributes[key] !== null && attributes[key] !== undefined) {
       element.setAttribute(key, attributes[key]);
     }
