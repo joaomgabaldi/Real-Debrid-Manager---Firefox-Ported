@@ -69,8 +69,8 @@
   "dlNotificationsInfo": { "message": "Won't send background requests if disabled." },
   "hoverLiftLabel": { "message": "Hover lift effect" },
   "hoverLiftDesc": { "message": "Adds a subtle lift and shadow." },
-  "jd2Label": { "message": "Send to JDownloader 2" },
-  "jd2Desc": { "message": "Sends links to port 9666. JD2 must be open." },
+  "jd2Label": { "message": "Send to JDownloader" },
+  "jd2Desc": { "message": "Sends links to port 9666. JD must be open." },
   "jdPortLabel": { "message": "JDownloader Port" },
   "vlcLabel": { "message": "Open natively in VLC (via M3U)" },
   "vlcDesc": { "message": "Downloads an .m3u file that opens automatically in VLC or your default player." },
@@ -169,7 +169,5 @@
   "copyAllLinks": { "message": "Copy All" },
   "copySuccess": { "message": "Copied to clipboard!" },
   "back": { "message": "Back" },
-  "exportJd2": { "message": "Send to JD2" },
-  "exportJd2Success": { "message": "Sent to JDownloader 2!" },
-  "exportJd2Error": { "message": "JD2 unresponsive (port 9666)" }
+  "exportJd2": { "message": "Send to JD" }
 }
