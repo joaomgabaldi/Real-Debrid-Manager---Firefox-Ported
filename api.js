@@ -178,17 +178,14 @@ export async function apiDelete(endpoint) {
 }
 
 export function trackId(id) {
-  return new Promise((resolve, reject) => {
-    trackQueue = trackQueue.then(async () => {
-      try {
-        const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
-        const set = new Set(rd_tracked_ids || []);
-        set.add(id);
-        await browser.storage.local.set({ rd_tracked_ids: [...set] });
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
-    });
+  const operation = trackQueue.then(async () => {
+    const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
+    const set = new Set(rd_tracked_ids || []);
+    set.add(id);
+    await browser.storage.local.set({ rd_tracked_ids: [...set] });
   });
+  
+  trackQueue = operation.catch(() => {});
+
+  return operation;
 }
