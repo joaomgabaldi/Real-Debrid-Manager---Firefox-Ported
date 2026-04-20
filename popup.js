@@ -31,7 +31,7 @@ export function toggleSelectionMode(force) {
     if (state.selectionMode) {
         if(delSpan) {
             delSpan.removeAttribute('data-i18n');
-            delSpan.textContent = 'Segure p/ Excluir';
+            delSpan.textContent = i18n('holdToDelete');
         }
         DOM.$('#btn-delete-all').classList.add('active-mode');
         DOM.$$('.tab[data-tab]').forEach(t => t.classList.add('hidden'));
@@ -159,7 +159,10 @@ function bindEvents() {
   });
 
   const cycleBtn = DOM.$('#tab-type-cycle');
-  const cycleStates = [ { type: 'torrent', label: 'TOR ↻' }, { type: 'web', label: 'WEB ↻' } ];
+  const cycleStates = [ 
+    { type: 'torrent', label: i18n('filterTorrent') }, 
+    { type: 'web', label: i18n('filterWeb') } 
+  ];
   let cycleIndex = -1;
 
   cycleBtn.addEventListener('click', () => {
