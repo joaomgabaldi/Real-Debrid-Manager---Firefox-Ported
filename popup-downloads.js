@@ -1,7 +1,7 @@
 import { state, globals, DOM } from './popup-state.js';
 import { apiGet, apiPost, apiDelete, trackId, getValidToken } from './api.js';
 import { rdStorage } from './storage.js';
-import { i18n, formatBytes, toast, el, makeSvg } from './utils.js';
+import { i18n, formatBytes, toast, el, makeSvg, formatTimeAgo } from './utils.js';
 import { openModalWithNode, closeModal } from './popup-modals.js';
 import { updateBellFromDownloads } from './popup-notifications.js';
 
@@ -13,6 +13,7 @@ export function addIgnoreLock(id) {
 export function cacheData(downloads) {
   const thirtyDaysAgo = Date.now() - (30 * 86400000);
   let cleaned = downloads.filter(d => {
+    if (d._type === 'web') return false;
     if (isCompleted(d) && d.created_at) {
       return new Date(d.created_at).getTime() > thirtyDaysAgo;
     }
@@ -760,25 +761,6 @@ function formatETA(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   return `${h}h${m}m`;
-}
-
-function formatTimeAgo(dateStr) {
-  if (!dateStr) return null;
-  const date = new Date(dateStr);
-  if (isNaN(date)) return null;
-
-  const diffMs = Date.now() - date.getTime();
-  if (diffMs <= 0) return i18n('justNow');
-
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return i18n('justNow');
-  if (diffHours < 1) return i18n('agoDays', `${diffMins}m`);
-  if (diffDays < 1) return i18n('agoDays', `${diffHours}h`);
-  if (diffDays === 1) return i18n('agoDays', '1d');
-  return i18n('agoDays', `${diffDays}d`);
 }
 
 function makeTrashSvg() {
