@@ -17,7 +17,7 @@ let jdPort = '9666';
 let currentlyLockedTorrentId = null;
 let ignoreAutoLockIds = new Set();
 let oauthPollingInterval = null;
-let isFetchingAll = false; // Flag para evitar execuções paralelas de fetchAll
+let isFetchingAll = false;
 
 const dlElementMap = new Map();
 const $ = (sel) => document.querySelector(sel);
@@ -39,7 +39,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.addEventListener('pagehide', () => stopAutoRefresh());
 
-// Consolida múltiplas chamadas ao storage no boot
 async function bootExtension() {
   const data = await browser.storage.local.get([
     'rd_theme', 'rd_hover_lift', 'rd_use_jdownloader', 'rd_jd_port', 
@@ -47,7 +46,6 @@ async function bootExtension() {
     'rd_cached_user', 'rd_oauth_pending'
   ]);
 
-  // Aplica configurações
   const theme = data.rd_theme || 'dark';
   document.documentElement.setAttribute('data-theme', theme);
   const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
@@ -65,7 +63,6 @@ async function bootExtension() {
   if (token) {
     hasValidToken = true;
     
-    // Aplica dados cacheados
     if (data.rd_cached_downloads && data.rd_cached_downloads.length > 0) {
       allDownloads = data.rd_cached_downloads;
       renderDownloads();
@@ -208,7 +205,6 @@ function saveTheme(theme) {
 let deleteAllHoldTimer = null;
 
 function bindEvents() {
-  // Global Keyboard Shortcuts
   document.addEventListener('keydown', (e) => {
     const overlay = $('#modal-overlay');
     const isModalOpen = overlay && !overlay.classList.contains('hidden');
@@ -220,7 +216,6 @@ function bindEvents() {
     }
 
     if (e.key === 'Enter' && isModalOpen) {
-      // Evita ativar se o foco estiver em um textarea para permitir quebras de linha
       if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') return;
       
       const submitBtn = $('#modal-body').querySelector('.form-submit:not([disabled])');
