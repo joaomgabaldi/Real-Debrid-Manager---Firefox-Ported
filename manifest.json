@@ -22,7 +22,9 @@
   ],
   "host_permissions": [
     "https://api.real-debrid.com/*",
-    "http://127.0.0.1:9666/*",
+    "http://127.0.0.1:9666/*"
+  ],
+  "optional_host_permissions": [
     "<all_urls>"
   ],
   "background": {
