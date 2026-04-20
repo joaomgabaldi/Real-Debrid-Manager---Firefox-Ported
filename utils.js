@@ -32,10 +32,6 @@ export function formatBytes(bytes, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-/**
- * Cria elementos DOM de forma declarativa.
- * Suporta event listeners se a chave começar com 'on' e o valor for uma função.
- */
 export function el(tag, attributes = {}, ...children) {
   const element = document.createElement(tag);
   for (const key in attributes) {
@@ -44,7 +40,6 @@ export function el(tag, attributes = {}, ...children) {
     } else if (key === 'style') {
       element.style.cssText = attributes[key];
     } else if (key.startsWith('on') && typeof attributes[key] === 'function') {
-      // Suporte a event listeners (ex: onclick: () => ...)
       element.addEventListener(key.toLowerCase().substring(2), attributes[key]);
     } else if (attributes[key] !== null && attributes[key] !== undefined) {
       element.setAttribute(key, attributes[key]);
