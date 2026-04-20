@@ -383,6 +383,12 @@ export function updateAgeFilterUI() {
   }
 }
 
+function isVideo(filename) {
+  const exts = ['.mp4', '.mkv', '.avi', '.webm', '.mov', '.m4v'];
+  const lower = (filename || '').toLowerCase();
+  return exts.some(ext => lower.endsWith(ext));
+}
+
 export function renderDownloads() {
   const list = DOM.$('#download-list');
   const activeTab = DOM.$('[data-tab="downloading"]');
@@ -459,11 +465,35 @@ export function renderDownloads() {
       const header = li.querySelector('.dl-item-header');
       const delBtn = li.querySelector('.dl-delete-btn');
       
-      const existingDlBtn = li.querySelector('.dl-download-btn');
+      const existingDlBtn = li.querySelector('.dl-download-btn:not(.dl-play-btn)');
+      const existingPlayBtn = li.querySelector('.dl-play-btn');
       
       if (completed && canDownload(dl) && header && delBtn) {
         if (!existingDlBtn || existingDlBtn.dataset.action === 'select-files') {
           if (existingDlBtn) existingDlBtn.remove();
+          if (existingPlayBtn) existingPlayBtn.remove();
+
+          let showPlay = false;
+          if (dl._type === 'web' && isVideo(dl.name)) showPlay = true;
+          if (dl._type === 'torrent') {
+             if (dl.files && dl.files.length === 1 && isVideo(dl.files[0].path)) showPlay = true;
+             else if (isVideo(dl.name)) showPlay = true;
+          }
+
+          if (showPlay) {
+            const playBtn = document.createElement('button');
+            playBtn.className = 'dl-download-btn dl-play-btn';
+            playBtn.setAttribute('aria-label', i18n('play'));
+            playBtn.dataset.action = 'play';
+            playBtn.dataset.type = dl._type;
+            playBtn.dataset.id = String(dl.id);
+            playBtn.title = i18n('play');
+            const playBtnIcon = makePlaySvg();
+            playBtnIcon.style.cssText = 'position:relative;z-index:1;';
+            playBtn.appendChild(playBtnIcon);
+            header.insertBefore(playBtn, delBtn);
+          }
+
           const dlBtn = document.createElement('button');
           dlBtn.className = 'dl-download-btn';
           dlBtn.setAttribute('aria-label', i18n('download'));
@@ -478,6 +508,8 @@ export function renderDownloads() {
       } else if (dl.download_state === 'waiting_selection' && header && delBtn) {
         if (!existingDlBtn || existingDlBtn.dataset.action !== 'select-files') {
           if (existingDlBtn) existingDlBtn.remove();
+          if (existingPlayBtn) existingPlayBtn.remove();
+          
           const selectBtn = document.createElement('button');
           selectBtn.className = 'dl-download-btn';
           selectBtn.setAttribute('aria-label', i18n('selectFiles'));
@@ -492,8 +524,9 @@ export function renderDownloads() {
           selectBtn.appendChild(selectIcon);
           header.insertBefore(selectBtn, delBtn);
         }
-      } else if (!completed && dl.download_state !== 'waiting_selection' && existingDlBtn) {
-        existingDlBtn.remove();
+      } else if (!completed && dl.download_state !== 'waiting_selection') {
+        if (existingDlBtn) existingDlBtn.remove();
+        if (existingPlayBtn) existingPlayBtn.remove();
       }
 
       const currentFileCount = (dl.files || []).length;
@@ -680,6 +713,27 @@ export function renderItem(dl) {
   header.appendChild(nameSpan);
 
   if (completed && canDownload(dl)) {
+    let showPlay = false;
+    if (dl._type === 'web' && isVideo(dl.name)) showPlay = true;
+    if (dl._type === 'torrent') {
+       if (dl.files && dl.files.length === 1 && isVideo(dl.files[0].path)) showPlay = true;
+       else if (isVideo(dl.name)) showPlay = true;
+    }
+
+    if (showPlay) {
+      const playBtn = document.createElement('button');
+      playBtn.className = 'dl-download-btn dl-play-btn';
+      playBtn.setAttribute('aria-label', i18n('play'));
+      playBtn.dataset.action = 'play';
+      playBtn.dataset.type = type;
+      playBtn.dataset.id = String(dl.id);
+      playBtn.title = i18n('play');
+      const playBtnIcon = makePlaySvg();
+      playBtnIcon.style.cssText = 'position:relative;z-index:1;';
+      playBtn.appendChild(playBtnIcon);
+      header.appendChild(playBtn);
+    }
+
     const dlBtn = document.createElement('button');
     dlBtn.className = 'dl-download-btn';
     dlBtn.setAttribute('aria-label', i18n('download'));
@@ -782,6 +836,12 @@ function formatETA(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   return `${h}h${m}m`;
+}
+
+function makePlaySvg() {
+  return makeSvg([
+    ['polygon', { points: '5 3 19 12 5 21 5 3', fill: 'currentColor' }]
+  ]);
 }
 
 function makeTrashSvg() {
@@ -1005,6 +1065,60 @@ export async function downloadFile(type, id) {
     const msg = err.name === 'AbortError' ? i18n('dlTimeout') : i18n('dlFailed');
     toast(msg, 'error');
   }
+}
+
+export async function playFile(type, id) {
+  try {
+    const dl = state.allDownloads.find(d => String(d.id) === String(id));
+
+    if (type === 'web' && dl?._rd_download) {
+      triggerPlay(dl._rd_download, dl.name);
+      return;
+    }
+
+    if (type === 'torrent') {
+      let links = dl?.links || [];
+      if (links.length === 0) {
+        const info = await apiGet(`/torrents/info/${id}`);
+        links = info?.links || [];
+      }
+
+      if (links.length > 1) {
+        toast(i18n('multipleLinksExpand'), 'info');
+        const itemElement = globals.dlElementMap.get(String(id));
+        if (itemElement && !itemElement.classList.contains('expanded')) {
+          itemElement.classList.add('expanded');
+          if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
+            fetchTorrentFiles(dl, itemElement);
+          }
+        }
+        return;
+      }
+
+      if (links.length > 0) {
+        toast(i18n('startingStream'), 'success');
+        const unrestricted = await apiPost('/unrestrict/link', { link: links[0] });
+        if (unrestricted?.download) triggerPlay(unrestricted.download, dl.name);
+        else toast(i18n('failedDlLink'), 'error');
+      } else {
+        toast(i18n('noDlLink'), 'error');
+      }
+      return;
+    }
+  } catch (err) {
+    if (err.message === 'Unauthenticated') return;
+    toast(i18n('dlFailed'), 'error');
+  }
+}
+
+export function triggerPlay(url, filename = '') {
+  if (!String(url).startsWith('https://') && !String(url).startsWith('http://')) {
+    toast(i18n('invalidDlLink'), 'error');
+    return;
+  }
+  
+  const playerUrl = browser.runtime.getURL(`player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(filename)}`);
+  browser.tabs.create({ url: playerUrl });
 }
 
 export async function triggerDownload(url, filename = '') {
