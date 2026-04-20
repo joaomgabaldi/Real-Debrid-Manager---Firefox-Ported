@@ -1,7 +1,5 @@
-import { OAUTH_BASE, getValidToken, apiGet, apiPost, apiDelete, trackId, onAuthFailure } from './api.js';
+import { OAUTH_BASE, OAUTH_CLIENT_ID, getValidToken, apiGet, apiPost, apiDelete, trackId, onAuthFailure } from './api.js';
 import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast } from './utils.js';
-
-const OPENSOURCE_CLIENT_ID = 'X245A4XAIBGVM';
 
 let hasValidToken = false;
 let currentTab = 'all';
@@ -1543,7 +1541,7 @@ async function startOAuthFlow() {
   container.replaceChildren(el('div', {style: 'text-align:center; padding:10px;'}, el('div', {className: 'spinner'}), i18n('requestingCode')));
   
   try {
-    const res = await fetch(`${OAUTH_BASE}/device/code?client_id=${OPENSOURCE_CLIENT_ID}&new_credentials=yes`);
+    const res = await fetch(`${OAUTH_BASE}/device/code?client_id=${OAUTH_CLIENT_ID}&new_credentials=yes`);
     const data = await res.json();
     
     if (!data.device_code) throw new Error('No device code received');
@@ -1592,7 +1590,7 @@ function renderOAuthPending(data) {
 
 async function pollDeviceCredentials(deviceCode) {
   try {
-    const res = await fetch(`${OAUTH_BASE}/device/credentials?client_id=${OPENSOURCE_CLIENT_ID}&code=${deviceCode}`);
+    const res = await fetch(`${OAUTH_BASE}/device/credentials?client_id=${OAUTH_CLIENT_ID}&code=${deviceCode}`);
     if (res.status === 403) return; 
     if (!res.ok) throw new Error('Polling failed');
     
