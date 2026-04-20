@@ -25,7 +25,7 @@
   "loginToStart": { "message": "Faça login no Real-Debrid para começar" },
   "connectRd": { "message": "Conectar ao Real-Debrid" },
   "verifyingAuth": { "message": "Verificando autorização..." },
-  "accessRevoked": { "message": "Acesso revogado ou expirado. Reautentique-se." },
+  "accessRevoked": { "message": "Acesso revocado ou expirado. Reautentique-se." },
   "unnamedDownload": { "message": "Download sem nome" },
   "unnamedTorrent": { "message": "Torrent sem nome" },
   "fileX": { "message": "Arquivo" },
@@ -157,5 +157,10 @@
   "openInVlc": { "message": "Abrir no VLC" },
   "holdToDelete": { "message": "Segure p/ Excluir" },
   "filterTorrent": { "message": "TOR ↻" },
-  "filterWeb": { "message": "WEB ↻" }
+  "filterWeb": { "message": "WEB ↻" },
+  "loading": { "message": "Carregando..." },
+  "errorNoUrl": { "message": "Erro: URL não fornecida." },
+  "defaultVideoName": { "message": "video" },
+  "defaultStreamName": { "message": "RD Stream" },
+  "downloadNameFallback": { "message": "Download" }
 }
