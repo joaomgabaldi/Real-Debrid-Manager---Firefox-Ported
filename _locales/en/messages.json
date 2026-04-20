@@ -64,6 +64,7 @@
   "delete": { "message": "Delete" },
   "contextMenuLabel": { "message": "Right-click context menu" },
   "contextMenuDesc": { "message": "Show \"Send to RD Manager\" when right-clicking links." },
+  "contextMenuTitle": { "message": "Send to RD Manager" },
   "dlNotificationsLabel": { "message": "Download notifications" },
   "dlNotificationsDesc": { "message": "Notify me when downloads are ready." },
   "dlNotificationsInfo": { "message": "Won't send background requests if disabled." },
