@@ -176,13 +176,17 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   if (isTorrentFile) {
     const urlObj = new URL(url);
     const targetOrigin = `${urlObj.protocol}//${urlObj.host}/*`;
-    const hasPermission = await browser.permissions.contains({ origins: [targetOrigin] });
-    if (!hasPermission) {
+    
+    try {
       const granted = await browser.permissions.request({ origins: [targetOrigin] });
       if (!granted) {
         showBadge(false);
         return;
       }
+    } catch (err) {
+      console.warn('RD Manager: Erro ao solicitar permissão:', err);
+      showBadge(false);
+      return;
     }
   }
 
