@@ -21,7 +21,7 @@ export function showAuthModal(autoStartOauth = false) {
 
     let authSection;
     if (state.hasValidToken) {
-      const canConvert = cachedUser?.points >= 900;
+      const canConvert = cachedUser?.points >= 1000;
       const convertBtn = canConvert ? el('button', {
         id: 'btn-convert-points', 
         className: 'action-btn secondary', 
