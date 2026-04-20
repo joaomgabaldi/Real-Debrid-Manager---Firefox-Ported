@@ -785,8 +785,9 @@ export function renderItem(dl) {
 
 export function isCompleted(dl) {
   const s = (dl.download_state || '').toLowerCase();
-  if (s === 'processing' || s === 'waiting_selection' || s.includes('queue')) return false;
-  return s === 'completed' || (dl.progress != null && dl.progress >= 1);
+  // Agora adotamos uma whitelist explícita para evitar falsos positivos de progresso 100%
+  // em estados de Compressão ou Upload.
+  return s === 'completed';
 }
 
 export function canDownload(dl) {
