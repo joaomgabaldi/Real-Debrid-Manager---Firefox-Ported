@@ -14,6 +14,7 @@ let visibleCount = 50;
 let currentFiltered = [];
 let cachedNotificationsEnabled = true;
 let useJDownloader = false;
+let jdPort = '9666';
 
 let currentlyLockedTorrentId = null;
 let ignoreAutoLockIds = new Set();
@@ -186,12 +187,13 @@ function enforceSelectionLock() {
 }
 
 async function loadSettings() {
-  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_use_jdownloader']).then((data) => {
+  return browser.storage.local.get(['rd_theme', 'rd_hover_lift', 'rd_use_jdownloader', 'rd_jd_port']).then((data) => {
     const theme = data.rd_theme || 'dark';
     document.documentElement.setAttribute('data-theme', theme);
     const hoverLift = data.rd_hover_lift !== false ? 'on' : 'off';
     document.documentElement.setAttribute('data-hover-lift', hoverLift);
     useJDownloader = data.rd_use_jdownloader === true;
+    jdPort = data.rd_jd_port || '9666';
   });
 }
 
@@ -592,7 +594,7 @@ async function triggerDownload(url, filename = '') {
       formData.append('autostart', '1');
       if (filename) formData.append('package', filename);
 
-      const res = await fetch('http://127.0.0.1:9666/flashgot', {
+      const res = await fetch(`http://127.0.0.1:${jdPort}/flashgot`, {
         method: 'POST',
         body: formData.toString(),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -1366,11 +1368,12 @@ function closeModal(force = false) {
 
 function showAuthModal(autoStartOauth = false) {
   const autoStart = autoStartOauth === true;
-  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_cached_user', 'rd_use_jdownloader', 'rd_oauth_pending']).then((data) => {
+  browser.storage.local.get(['rd_context_menu', 'rd_notifications_enabled', 'rd_hover_lift', 'rd_cached_user', 'rd_use_jdownloader', 'rd_jd_port', 'rd_oauth_pending']).then((data) => {
     const contextMenuEnabled = data.rd_context_menu !== false;
     const notificationsEnabled = data.rd_notifications_enabled !== false;
     const hoverLiftEnabled = data.rd_hover_lift !== false;
     const jd2Enabled = data.rd_use_jdownloader === true;
+    const jdPortValue = data.rd_jd_port || '9666';
     const cachedUser = data.rd_cached_user;
     const userPoints = cachedUser?.points != null ? cachedUser.points.toLocaleString() : '—';
     const username = cachedUser?.username || cachedUser?.email || '—';
@@ -1445,6 +1448,10 @@ function showAuthModal(autoStartOauth = false) {
             el('input', {type: 'checkbox', id: 'toggle-jd2', checked: jd2Enabled ? 'checked' : null}),
             el('span', {className: 'toggle-slider'})
           )
+        ),
+        el('div', {id: 'jd-port-container', style: jd2Enabled ? 'margin-top: 10px; display: block;' : 'display: none;'},
+          el('label', {className: 'form-label', style: 'margin-bottom:2px; font-size: 12px;'}, i18n('jdPortLabel')),
+          el('input', {type: 'number', id: 'input-jd-port', className: 'form-input', value: jdPortValue, style: 'margin-top: 5px;'})
         )
       ),
       el('div', {className: 'settings-account-section', id: 'settings-account-area'}, authSection)
@@ -1467,7 +1474,19 @@ function showAuthModal(autoStartOauth = false) {
     $('#toggle-jd2').addEventListener('change', (e) => {
       useJDownloader = e.target.checked;
       browser.storage.local.set({ rd_use_jdownloader: useJDownloader });
+      const portContainer = $('#jd-port-container');
+      if (portContainer) {
+        portContainer.style.display = useJDownloader ? 'block' : 'none';
+      }
     });
+
+    const jdPortInput = $('#input-jd-port');
+    if (jdPortInput) {
+      jdPortInput.addEventListener('change', (e) => {
+        jdPort = e.target.value.trim() || '9666';
+        browser.storage.local.set({ rd_jd_port: jdPort });
+      });
+    }
 
     const startOauthBtn = $('#btn-start-oauth');
     if (startOauthBtn) {
