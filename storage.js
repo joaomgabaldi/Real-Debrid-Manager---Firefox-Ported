@@ -12,6 +12,13 @@ export const rdStorage = {
   
   saveLocalDownloads: (downloads) => browser.storage.local.set({ rd_local_downloads: downloads }),
 
+  getLocalNotifications: async () => {
+    const res = await browser.storage.local.get('rd_local_notifications');
+    return res.rd_local_notifications || [];
+  },
+
+  saveLocalNotifications: (notifications) => browser.storage.local.set({ rd_local_notifications: notifications }),
+
   saveOAuthPending: (data) => browser.storage.local.set({ rd_oauth_pending: data }),
   removeOAuthPending: () => browser.storage.local.remove('rd_oauth_pending'),
 
