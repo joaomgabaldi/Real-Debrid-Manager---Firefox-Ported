@@ -69,7 +69,6 @@ async function bootExtension() {
   state.cachedNotificationsEnabled = data.rd_notifications_enabled !== false;
   state.selectionMode = false;
   
-  // Solução para o Item 6: Purge de ignoreAutoLockIds no carregamento (bootExtension)
   if (data.rd_ignore_locks && Array.isArray(data.rd_ignore_locks)) {
     const loadedIgnoreSet = new Set(data.rd_ignore_locks);
     
