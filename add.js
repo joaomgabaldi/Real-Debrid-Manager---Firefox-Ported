@@ -1,5 +1,5 @@
 import { getValidToken, apiGet, apiPost, apiPut, trackId, onAuthFailure } from './api.js';
-import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast } from './utils.js';
+import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast, initFixedTooltips } from './utils.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -20,31 +20,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   renderAddForm();
 });
-
-function initFixedTooltips() {
-  document.querySelectorAll('.info-icon:not(.tooltip-inited)').forEach(icon => {
-    icon.classList.add('tooltip-inited');
-    const tip = icon.querySelector('.info-tooltip');
-    if (!tip) return;
-    icon.addEventListener('mouseenter', () => {
-      const iconRect = icon.getBoundingClientRect();
-      const bodyRect = document.body.getBoundingClientRect();
-      tip.style.position = 'fixed';
-      tip.style.visibility = 'hidden';
-      tip.classList.add('visible');
-      const tipWidth = tip.offsetWidth;
-      tip.style.visibility = '';
-      tip.style.left = `${bodyRect.left + (bodyRect.width - tipWidth) / 2}px`;
-      tip.style.top = `${iconRect.bottom + 6}px`;
-    });
-    icon.addEventListener('mouseleave', () => {
-      tip.classList.remove('visible');
-      tip.style.position = '';
-      tip.style.left = '';
-      tip.style.top = '';
-    });
-  });
-}
 
 function renderAddForm() {
   const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
@@ -149,9 +124,14 @@ async function handleFileSelection(torrentId) {
     el('span', {style: 'margin-top: 10px; display: block;'}, i18n('waitingConversion'))
   ));
 
+  let isCancelled = false;
+  window.addEventListener('pagehide', () => { isCancelled = true; });
+  window.addEventListener('beforeunload', () => { isCancelled = true; });
+
   let info;
   let attempts = 0;
   while (attempts < 60) {
+    if (isCancelled) return;
     try {
       info = await apiGet(`/torrents/info/${torrentId}`);
       if (info && info.status !== 'magnet_conversion') break;
@@ -162,6 +142,8 @@ async function handleFileSelection(torrentId) {
     await new Promise(r => setTimeout(r, 1000));
     attempts++;
   }
+
+  if (isCancelled) return;
 
   if (!info || info.status === 'error' || info.status === 'dead') {
     toast(i18n('errorProcessClose'), 'error');
