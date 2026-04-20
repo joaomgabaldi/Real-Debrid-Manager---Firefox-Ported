@@ -1393,7 +1393,7 @@ textarea.form-input {
 
 .toast.success { background: #1a9c4a; }
 .toast.error { background: #f46878; }
-.toast.info { background: #1a6c9c; } /* Estilo adicionado */
+.toast.info { background: #1a6c9c; color: #fff; }
 
 .toast.hiding {
   opacity: 0;
