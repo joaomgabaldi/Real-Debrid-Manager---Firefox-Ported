@@ -29,7 +29,19 @@ export function cacheData(downloads) {
   if (cleaned.length > 1000) {
     cleaned = cleaned.slice(0, 1000);
   }
-  rdStorage.saveCachedDownloads(cleaned);
+
+  const storageOptimized = cleaned.map(dl => {
+    const copy = { ...dl };
+    if (copy.links && copy.links.length > 2) {
+      copy.links = copy.links.slice(0, 2);
+    }
+    if (copy.files && copy.files.length > 50) {
+      copy.files = copy.files.slice(0, 50);
+    }
+    return copy;
+  });
+
+  rdStorage.saveCachedDownloads(storageOptimized);
 }
 
 export function refreshInBackground() {
@@ -845,7 +857,7 @@ export async function preloadTorrentFiles() {
         console.debug(`RD Manager: Preload torrent file infos falhou no ID ${dl.id}.`, err);
       }
     }));
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 
   if (changed) {
