@@ -168,14 +168,23 @@ export async function fetchAll(isBackgroundSync = false) {
     }
 
     const { rd_local_downloads, rd_cached_downloads } = await rdStorage.get(['rd_local_downloads', 'rd_cached_downloads']);
+    
+    // Ajuste solicitado: Gerenciamento robusto de downloads locais "web"
     if (rd_local_downloads && rd_local_downloads.length > 0) {
       const expiryCutoff = Date.now() - 7 * 86400000;
       const valid = rd_local_downloads.filter(d => new Date(d.created_at).getTime() > expiryCutoff);
+      
       if (valid.length !== rd_local_downloads.length) {
         browser.storage.local.set({ rd_local_downloads: valid });
       }
+
+      // Remove itens web atuais para evitar duplicatas
       state.allDownloads = state.allDownloads.filter(d => d._type !== 'web');
-      valid.forEach(d => state.allDownloads.push(d));
+      
+      // Reinserção garantindo o tipo 'web' para consistência futura
+      valid.forEach(d => {
+        state.allDownloads.push({ ...d, _type: 'web' });
+      });
     }
     
     state.allDownloads.sort((a, b) => {
@@ -977,7 +986,7 @@ export async function downloadFile(type, id) {
       }
 
       if (links.length > 1) {
-        toast(i18n('multipleLinksExpand') || 'Múltiplos ficheiros. Expanda o item para descarregar.', 'info');
+        toast(i18n('multipleLinksExpand'), 'info');
         const itemElement = globals.dlElementMap.get(String(id));
         if (itemElement && !itemElement.classList.contains('expanded')) {
           itemElement.classList.add('expanded');
