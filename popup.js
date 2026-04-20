@@ -1655,13 +1655,22 @@ async function openFileSelectionModal(torrentId) {
     try {
       await apiDelete(`/torrents/delete/${torrentId}`);
       toast(i18n('torrentCanceled'), 'success');
+
+      allDownloads = allDownloads.filter(dl => String(dl.id) !== String(torrentId));
+      cacheData(allDownloads);
+      
+      const itemElement = dlElementMap.get(String(torrentId));
+      if (itemElement) {
+        itemElement.remove();
+      }
+      dlElementMap.delete(String(torrentId));
+      renderDownloads();
     } catch (err) {
       if (err.message === 'Unauthenticated') return;
       toast(i18n('errorRemove'), 'error');
     }
     addIgnoreLock(torrentId);
     closeModal(true);
-    fetchAll();
   };
 
   const cancelLoadingBtn = el('button', {className: 'form-submit', style: 'margin-top: 15px; width: 100%; justify-content: center; background: #f46878 !important; color: #fff !important; border: none !important;'}, i18n('cancelTorrent'));
