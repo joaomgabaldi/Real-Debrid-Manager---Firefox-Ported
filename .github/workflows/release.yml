@@ -11,6 +11,11 @@ on:
           - patch
           - minor
           - major
+      changelog:
+        description: 'Changelog: Descreva as alterações desta versão'
+        required: false
+        default: 'Atualizações e correções gerais.'
+        type: string
 
 permissions:
   contents: write
@@ -32,7 +37,6 @@ jobs:
           CURRENT_VERSION=$(jq -r '.version' manifest.json)
           IFS='.' read -ra VER <<< "$CURRENT_VERSION"
           
-          # Caso o manifest tenha uma versão mal formatada, garante valores padrão
           MAJOR="${VER[0]:-0}"
           MINOR="${VER[1]:-0}"
           PATCH="${VER[2]:-0}"
@@ -53,7 +57,6 @@ jobs:
           echo "Versão anterior detectada: $CURRENT_VERSION"
           echo "Nova versão calculada: $NEW_VERSION"
           
-          # Salva a nova versão nas variáveis de ambiente do workflow
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Update manifest.json version
@@ -76,6 +79,7 @@ jobs:
         with:
           tag_name: v${{ env.NEW_VERSION }}
           name: Release v${{ env.NEW_VERSION }}
+          body: ${{ github.event.inputs.changelog }}
           files: release-${{ env.NEW_VERSION }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
