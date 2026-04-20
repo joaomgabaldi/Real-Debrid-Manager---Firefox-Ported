@@ -68,6 +68,7 @@
   "hoverLiftDesc": { "message": "Adds a subtle lift and shadow." },
   "jd2Label": { "message": "Send to JDownloader 2" },
   "jd2Desc": { "message": "Sends links to port 9666. JD2 must be open." },
+  "jdPortLabel": { "message": "JDownloader Port" },
   "points": { "message": "Fidelity Points" },
   "logout": { "message": "Logout" },
   "requestingCode": { "message": "Requesting code..." },
