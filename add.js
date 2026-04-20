@@ -93,49 +93,34 @@ function renderAddForm() {
     submitBtn.replaceChildren(i18n('adding'), el('span', {className: 'btn-spinner'}));
 
     try {
+      // TRATAMENTO PARA CONTAINERS (DLC, RSDF, CCF)
       if (file && (file.name.toLowerCase().endsWith('.dlc') || file.name.toLowerCase().endsWith('.rsdf') || file.name.toLowerCase().endsWith('.ccf'))) {
         
-        try {
-          // Lendo o arquivo como ArrayBuffer e forçando o Content-Type como octet-stream (igual ao PowerShell)
-          const buffer = await file.arrayBuffer();
-          const responseData = await apiPut('/unrestrict/containerFile', buffer, 'application/octet-stream');
-          
-          let extractedLinks = [];
-          if (Array.isArray(responseData)) {
-            extractedLinks = responseData;
-          } else if (responseData && Array.isArray(responseData.links)) {
-            extractedLinks = responseData.links;
-          } else if (responseData && typeof responseData === 'object') {
-            extractedLinks = Object.values(responseData);
-          } else if (typeof responseData === 'string') {
-            extractedLinks = [responseData];
-          }
+        // Uso de FormData conforme sugerido para evitar erros de boundary e parsing binário no browser
+        const formData = new FormData();
+        formData.append('files', file, file.name);
 
-          const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
+        const responseData = await apiPut('/unrestrict/containerFile', formData);
+        
+        // Parsing simplificado baseado no schema oficial (array de strings)
+        const extractedLinks = Array.isArray(responseData) ? responseData : [];
+        const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
 
-          if (validLinks.length === 0) {
-            toast('Falha: A API não conseguiu extrair as chaves deste arquivo.', 'error');
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('loading');
-            submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
-            return;
-          }
-
-          renderDecodedLinks(validLinks);
-          return;
-        } catch (err) {
-          console.warn('RD Manager: Falha ao descriptografar na API pública', err);
-          toast('Falha técnica ao contatar a API de descriptografia.', 'error');
+        if (validLinks.length === 0) {
+          toast('Falha: A API não conseguiu extrair links válidos deste arquivo.', 'error');
           submitBtn.disabled = false;
           submitBtn.classList.remove('loading');
           submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
           return;
         }
+
+        renderDecodedLinks(validLinks);
+        return;
       }
 
+      // TRATAMENTO PARA TORRENT / MAGNET
       let torrentId = null;
       if (file) {
-        // Torrents normais não precisam de Content-Type forçado
         const data = await apiPut('/torrents/addTorrent', file);
         torrentId = data?.id;
       } else {
@@ -149,7 +134,7 @@ function renderAddForm() {
         await handleFileSelection(torrentId);
       }
     } catch (err) {
-      console.warn('RD Manager: Falha ao adicionar ou processar arquivo', err);
+      console.warn('RD Manager: Falha ao processar arquivo', err);
       if (err.message === 'Unauthenticated') return;
       toast(i18n('failedAdd'), 'error');
       submitBtn.disabled = false;
