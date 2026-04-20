@@ -144,7 +144,7 @@
   "timeRemaining": { "message": "remaining (predicted)" },
   "addBtn": { "message": "Add" },
   "noFiles": { "message": "No files found." },
-  "addTorrentTitle": { "message": "Add Torrents & DLC" },
+  "addTorrentTitle": { "message": "Add Torrents & DLCs" },
   "dlFailedTitle": { "message": "Download Failed" },
   "dlFailedMessage": { "message": "An error occurred with the file." },
   "itemsDeleted": { "message": "item(s) deleted" },
@@ -166,7 +166,10 @@
   "dropSubtitleHere": { "message": "Drop subtitle here (.SRT or .VTT)" },
   "errorInvalidSubtitleFormat": { "message": "Invalid format. Please use a .SRT or .VTT file." },
   "decodedLinksTitle": { "message": "Decoded Links" },
-  "copyAllLinks": { "message": "Copy All Links" },
+  "copyAllLinks": { "message": "Copy All" },
   "copySuccess": { "message": "Copied to clipboard!" },
-  "back": { "message": "Back" }
+  "back": { "message": "Back" },
+  "exportJd2": { "message": "Send to JD2" },
+  "exportJd2Success": { "message": "Sent to JDownloader 2!" },
+  "exportJd2Error": { "message": "JD2 unresponsive (port 9666)" }
 }
