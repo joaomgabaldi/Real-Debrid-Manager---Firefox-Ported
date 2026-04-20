@@ -170,10 +170,7 @@ export async function apiPut(endpoint, blobData, contentType = null) {
   if (!token) throw new Error('Unauthenticated');
 
   const headers = { 'Authorization': `Bearer ${token}` };
-  
-  // CORREÇÃO: Só define o cabeçalho se NÃO for FormData. 
-  // FormData precisa que o browser defina o cabeçalho com o boundary correto.
-  if (contentType && !(blobData instanceof FormData)) {
+  if (contentType) {
     headers['Content-Type'] = contentType;
   }
 
