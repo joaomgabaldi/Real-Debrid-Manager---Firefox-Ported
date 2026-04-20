@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.addEventListener('pagehide', () => stopAutoRefresh());
 
-export function toggleSelectionMode(force) {
+function toggleSelectionMode(force) {
     state.selectionMode = force !== undefined ? force : !state.selectionMode;
     document.body.classList.toggle('selection-mode', state.selectionMode);
 
