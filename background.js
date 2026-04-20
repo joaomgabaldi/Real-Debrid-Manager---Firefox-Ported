@@ -82,7 +82,6 @@ async function checkForCompletedDownloads() {
     const trackedIds = new Set(rd_tracked_ids || []);
     if (trackedIds.size === 0) return;
 
-    // Timeout de 10s para evitar travamento em chamadas em segundo plano
     const torrents = await apiGet('/torrents', 10000);
     const current = [];
     if (Array.isArray(torrents)) {
