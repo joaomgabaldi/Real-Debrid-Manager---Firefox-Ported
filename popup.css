@@ -1872,3 +1872,54 @@ input, textarea {
   scrollbar-width: thin;
   scrollbar-color: var(--accent-scroll) transparent;
 }
+
+.dl-select-cb-wrap {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding-right: 6px;
+    padding-left: 2px;
+}
+body.selection-mode .dl-select-cb-wrap {
+    display: flex;
+}
+body.selection-mode .dl-delete-btn,
+body.selection-mode .dl-download-btn {
+    display: none !important;
+}
+.dl-select-cb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-input);
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease;
+}
+.dl-select-cb:checked {
+    background: var(--red);
+    border-color: var(--red);
+}
+.dl-select-cb:checked::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+.tab.hidden {
+    display: none !important;
+}
+#btn-select-all { flex: 1; }
+#btn-cancel-select { flex: 0.5; padding: 5px; }
+.tab-delete-all.active-mode {
+    background: var(--red-dim) !important;
+    color: var(--red) !important;
+}
