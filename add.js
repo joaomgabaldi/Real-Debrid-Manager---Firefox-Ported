@@ -99,6 +99,9 @@ function renderAddForm() {
       try {
         const responseData = await apiPut('/unrestrict/containerFile', file, 'application/octet-stream');
         
+        // Log para debugar o formato da resposta no Console do navegador (Ctrl+Shift+J)
+        console.log('RD containerFile response:', JSON.stringify(responseData));
+        
         let extractedLinks = [];
         if (Array.isArray(responseData)) {
           extractedLinks = responseData;
@@ -113,7 +116,7 @@ function renderAddForm() {
         const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
 
         if (validLinks.length === 0) {
-          toast('Nenhum link foi extraído do container.', 'error');
+          toast('Nenhum link suportado foi extraído do container.', 'error');
         } else {
           renderDecodedLinks(validLinks);
           return;
@@ -162,9 +165,12 @@ function renderDecodedLinks(links) {
     className: 'form-input',
     style: 'margin-top: 10px; height: 180px; font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap;',
     readOnly: true,
-    spellcheck: 'false',
-    value: links.join('\n')
+    spellcheck: 'false'
+    // Removido o value daqui para não setar como atributo HTML
   });
+  
+  // A propriedade .value é setada diretamente no elemento DOM após a sua criação
+  textArea.value = links.join('\n');
 
   const copyBtn = el('button', {
     className: 'action-btn ghost',
