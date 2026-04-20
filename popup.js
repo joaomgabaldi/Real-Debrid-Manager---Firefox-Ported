@@ -84,7 +84,7 @@ async function bootExtension() {
       }
 
       if (hasChanged) {
-        browser.storage.local.set({ rd_ignore_locks: Array.from(loadedIgnoreSet) });
+        rdStorage.set({ rd_ignore_locks: Array.from(loadedIgnoreSet) });
       }
     }
     state.ignoreAutoLockIds = loadedIgnoreSet;
@@ -121,7 +121,7 @@ async function bootExtension() {
       pollDeviceCredentials(data.rd_oauth_pending.device_code);
       globals.oauthPollingInterval = setInterval(() => pollDeviceCredentials(data.rd_oauth_pending.device_code), 5000);
     } else if (data.rd_oauth_pending) {
-      browser.storage.local.remove('rd_oauth_pending');
+      rdStorage.removeOAuthPending();
     }
   }
 }
