@@ -4,7 +4,7 @@ import { rdStorage } from './storage.js';
 import { i18n, localizeHtmlPage } from './utils.js';
 import { showAuthModal, forceLogout, pollDeviceCredentials } from './popup-auth.js';
 import { loadLocalNotifications, showNotificationsModal } from './popup-notifications.js';
-import { fetchAll, fetchUserInfo, renderDownloads, refreshInBackground, enforceSelectionLock, stopAutoRefresh, showState, deleteSelected, showWebLinkModal, downloadFile, deleteDownload, fetchTorrentFiles, openFileSelectionModal, isCompleted, showUserBar, updateAgeFilterUI } from './popup-downloads.js';
+import { fetchAll, fetchUserInfo, renderDownloads, refreshInBackground, enforceSelectionLock, stopAutoRefresh, showState, deleteSelected, showWebLinkModal, downloadFile, playFile, deleteDownload, fetchTorrentFiles, openFileSelectionModal, isCompleted, showUserBar, updateAgeFilterUI } from './popup-downloads.js';
 import { closeModal } from './popup-modals.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -313,6 +313,8 @@ function handleListClick(e) {
   if (dlBtn) {
     if (dlBtn.dataset.action === 'select-files') {
       openFileSelectionModal(dlBtn.dataset.id);
+    } else if (dlBtn.dataset.action === 'play') {
+      playFile(dlBtn.dataset.type, dlBtn.dataset.id);
     } else {
       downloadFile(dlBtn.dataset.type, dlBtn.dataset.id);
     }
