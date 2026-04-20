@@ -93,10 +93,33 @@ function renderAddForm() {
     submitBtn.replaceChildren(i18n('adding'), el('span', {className: 'btn-spinner'}));
 
     try {
-      // Verifica se é um arquivo de container (DLC, RSDF, CCF) 
       if (file && (file.name.toLowerCase().endsWith('.dlc') || file.name.toLowerCase().endsWith('.rsdf') || file.name.toLowerCase().endsWith('.ccf'))) {
-        const links = await apiPut('/unrestrict/containerFile', file);
-        renderDecodedLinks(links);
+        
+        // Conversão do objeto File para ArrayBuffer para enviar os bytes brutos sem metadados MIME do navegador
+        const buffer = await file.arrayBuffer();
+        const responseData = await apiPut('/unrestrict/containerFile', buffer);
+        
+        let extractedLinks = [];
+        
+        if (Array.isArray(responseData)) {
+            extractedLinks = responseData;
+        } else if (responseData && Array.isArray(responseData.links)) {
+            extractedLinks = responseData.links;
+        } else if (responseData && typeof responseData === 'object') {
+            extractedLinks = Object.values(responseData).filter(val => typeof val === 'string' && val.startsWith('http'));
+        } else if (typeof responseData === 'string' && responseData.startsWith('http')) {
+            extractedLinks = [responseData];
+        }
+
+        if (extractedLinks.length === 0) {
+            toast('Nenhum link suportado extraído deste arquivo DLC.', 'error');
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('loading');
+            submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
+            return;
+        }
+
+        renderDecodedLinks(extractedLinks);
         return;
       }
 
@@ -128,15 +151,9 @@ function renderAddForm() {
 }
 
 function renderDecodedLinks(links) {
-  if (!links || links.length === 0) {
-    toast(i18n('noFiles'), 'error');
-    renderAddForm();
-    return;
-  }
-
   const textArea = el('textarea', {
     className: 'form-input',
-    style: 'margin-top: 10px; height: 180px; font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1.5;',
+    style: 'margin-top: 10px; height: 180px; font-family: "JetBrains Mono", monospace; font-size: 11px; line-height: 1.5; white-space: pre-wrap;',
     readOnly: true,
     spellcheck: 'false',
     value: links.join('\n')
