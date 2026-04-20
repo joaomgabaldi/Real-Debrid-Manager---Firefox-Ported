@@ -69,8 +69,8 @@
   "dlNotificationsInfo": { "message": "No enviará solicitudes en segundo plano si está desactivado." },
   "hoverLiftLabel": { "message": "Efecto de elevación al pasar el ratón" },
   "hoverLiftDesc": { "message": "Añade una sutil elevación y sombra." },
-  "jd2Label": { "message": "Enviar a JDownloader 2" },
-  "jd2Desc": { "message": "Envía enlaces al puerto 9666. JD2 debe estar abierto." },
+  "jd2Label": { "message": "Enviar a JDownloader" },
+  "jd2Desc": { "message": "Envía enlaces al puerto 9666. JD debe estar abierto." },
   "jdPortLabel": { "message": "Puerto de JDownloader" },
   "vlcLabel": { "message": "Abrir de forma nativa en VLC (vía M3U)" },
   "vlcDesc": { "message": "Descarga un archivo .m3u que se abre automáticamente en VLC o en tu reproductor predeterminado." },
@@ -169,7 +169,5 @@
   "copyAllLinks": { "message": "Copiar Todo" },
   "copySuccess": { "message": "¡Copiado al portapapeles!" },
   "back": { "message": "Volver" },
-  "exportJd2": { "message": "Exportar a JD2" },
-  "exportJd2Success": { "message": "¡Enviado a JDownloader 2!" },
-  "exportJd2Error": { "message": "JD2 no responde (puerto 9666)" }
+  "exportJd2": { "message": "Enviar a JD" }
 }
