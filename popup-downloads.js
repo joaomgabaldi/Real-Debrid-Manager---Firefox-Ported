@@ -785,6 +785,7 @@ export function renderItem(dl) {
 
 export function isCompleted(dl) {
   const s = (dl.download_state || '').toLowerCase();
+  // Item 4: Whitelist restrita para garantir que o download está 100% disponível.
   return s === 'completed';
 }
 
@@ -1347,32 +1348,39 @@ let storageQueue = Promise.resolve();
 
 export function saveLocalDownloadsArray(unrestrictResults) {
   return new Promise((resolve) => {
+    // Item 1: Solução para evitar travamento da fila em caso de erro na Promise encadeada
     storageQueue = storageQueue.then(async () => {
-      const existing = await rdStorage.getLocalDownloads();
-      const newEntries = unrestrictResults.map(d => ({
-        id: d.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: d.filename || i18n('unnamedDownload'),
-        size: d.filesize || 0,
-        progress: 1,
-        download_state: 'completed',
-        created_at: new Date().toISOString(),
-        _type: 'web',
-        _rd_download: d.download,
-        _rd_link: d.link,
-        _rd_host: d.host,
-        files: d.download ? [{
-          id: 0,
-          name: d.filename || 'Download',
+      try {
+        const existing = await rdStorage.getLocalDownloads();
+        const newEntries = unrestrictResults.map(d => ({
+          id: d.id || `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: d.filename || i18n('unnamedDownload'),
           size: d.filesize || 0,
-          short_name: d.filename || 'Download',
-        }] : [],
-      }));
+          progress: 1,
+          download_state: 'completed',
+          created_at: new Date().toISOString(),
+          _type: 'web',
+          _rd_download: d.download,
+          _rd_link: d.link,
+          _rd_host: d.host,
+          files: d.download ? [{
+            id: 0,
+            name: d.filename || 'Download',
+            size: d.filesize || 0,
+            short_name: d.filename || 'Download',
+          }] : [],
+        }));
 
-      const merged = [...newEntries, ...existing].slice(0, 99);
-      await rdStorage.saveLocalDownloads(merged);
-      for (const e of newEntries) await trackId(String(e.id));
-      resolve();
-    }).catch(console.error);
+        const merged = [...newEntries, ...existing].slice(0, 99);
+        await rdStorage.saveLocalDownloads(merged);
+        for (const e of newEntries) await trackId(String(e.id));
+      } catch (err) {
+        console.warn('RD Manager: Falha ao salvar downloads locais', err);
+      } finally {
+        // Resolve a Promise externa em qualquer cenário para não "congelar" o popup
+        resolve();
+      }
+    });
   });
 }
 
