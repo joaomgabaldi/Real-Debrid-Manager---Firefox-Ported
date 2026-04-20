@@ -96,15 +96,13 @@ function renderAddForm() {
       if (file && (file.name.toLowerCase().endsWith('.dlc') || file.name.toLowerCase().endsWith('.rsdf') || file.name.toLowerCase().endsWith('.ccf'))) {
         
         const ext = file.name.split('.').pop().toLowerCase();
-        const buffer = await file.arrayBuffer();
+        // Extrai o conteúdo como texto puro, conforme exigido pela API ayra
+        const payload = await file.text();
         
         try {
           const response = await fetch(`https://cable.ayra.ch/decrypt/decrypt.php?mode=${ext}`, {
             method: 'POST',
-            headers: {
-              'User-Agent': 'RDManager-FirefoxExtension/1.0 +https://github.com/joaomgabaldi/rd-manager'
-            },
-            body: buffer
+            body: payload
           });
 
           if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
