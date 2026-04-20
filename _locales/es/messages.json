@@ -162,5 +162,7 @@
   "errorNoUrl": { "message": "Error: URL no proporcionada." },
   "defaultVideoName": { "message": "video" },
   "defaultStreamName": { "message": "RD Stream" },
-  "downloadNameFallback": { "message": "Descarga" }
+  "downloadNameFallback": { "message": "Descarga" },
+  "dropSubtitleHere": { "message": "Suelta el subtítulo aquí (.SRT o .VTT)" },
+  "errorInvalidSubtitleFormat": { "message": "Formato no válido. Por favor, utiliza un archivo .SRT o .VTT." }
 }
