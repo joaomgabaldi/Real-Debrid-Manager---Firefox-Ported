@@ -5,12 +5,12 @@ import { i18n, formatBytes, toast, el, makeSvg, formatTimeAgo } from './utils.js
 import { openModalWithNode, closeModal } from './popup-modals.js';
 import { updateBellFromDownloads } from './popup-notifications.js';
 
-export function addIgnoreLock(id) {
+function addIgnoreLock(id) {
   state.ignoreAutoLockIds.add(String(id));
-  browser.storage.local.set({ rd_ignore_locks: Array.from(state.ignoreAutoLockIds) });
+  rdStorage.set({ rd_ignore_locks: Array.from(state.ignoreAutoLockIds) });
 }
 
-export function cacheData(downloads) {
+function cacheData(downloads) {
   const thirtyDaysAgo = Date.now() - (30 * 86400000);
   let cleaned = downloads.filter(d => {
     if (d._type === 'web') return false;
@@ -59,7 +59,7 @@ export function refreshInBackground() {
 const BASE_REFRESH_MS = 5000;
 const MAX_REFRESH_MS = 60000;
 
-export function startAutoRefresh() {
+function startAutoRefresh() {
   if (globals.autoRefreshTimer) return;
   scheduleNextRefresh();
 }
@@ -187,7 +187,7 @@ export async function fetchAll(isBackgroundSync = false) {
       const valid = rd_local_downloads.filter(d => new Date(d.created_at).getTime() > expiryCutoff);
       
       if (valid.length !== rd_local_downloads.length) {
-        browser.storage.local.set({ rd_local_downloads: valid });
+        rdStorage.saveLocalDownloads(valid);
       }
 
       state.allDownloads = state.allDownloads.filter(d => d._type !== 'web');
@@ -226,7 +226,7 @@ export async function fetchAll(isBackgroundSync = false) {
       }
     }
     if (changedLocks) {
-      browser.storage.local.set({ rd_ignore_locks: Array.from(state.ignoreAutoLockIds) });
+      rdStorage.set({ rd_ignore_locks: Array.from(state.ignoreAutoLockIds) });
     }
 
     cacheData(state.allDownloads);
@@ -320,7 +320,7 @@ export async function fetchUserInfo() {
     const res = await apiGet('/user');
     if (res) {
       showUserBar(res);
-      browser.storage.local.set({ rd_cached_user: res });
+      rdStorage.set({ rd_cached_user: res });
     }
   } catch (err) {
     if (err.message === 'Unauthenticated') return;
@@ -356,7 +356,7 @@ function calculateDaysRemaining(expiresAt) {
   return `${diffDays} ${diffDays === 1 ? i18n('dayRemaining') : i18n('daysRemaining')}`;
 }
 
-export function filterByAge(downloads, days) {
+function filterByAge(downloads, days) {
   if (!days) return downloads;
   const cutoff = Date.now() - days * 86400000;
   return downloads.filter(d => new Date(d.created_at || 0).getTime() < cutoff);
@@ -619,7 +619,7 @@ function renderItemMeta(dl) {
   return { metaEl, progressEl: progressEl || null, progressPct: completed ? null : progress };
 }
 
-export function renderExpandedContent(dl) {
+function renderExpandedContent(dl) {
   const type = dl._type;
   const size = dl.size ? formatBytes(dl.size) : '—';
   const files = dl.files || [];
@@ -684,7 +684,7 @@ export function renderExpandedContent(dl) {
   return expandedContent;
 }
 
-export function renderItem(dl) {
+function renderItem(dl) {
   const name = dl.name || i18n('unnamedDownload');
   const type = dl._type;
   const completed = isCompleted(dl);
@@ -785,17 +785,16 @@ export function renderItem(dl) {
 
 export function isCompleted(dl) {
   const s = (dl.download_state || '').toLowerCase();
-  // Item 4: Whitelist restrita para garantir que o download está 100% disponível.
   return s === 'completed';
 }
 
-export function canDownload(dl) {
+function canDownload(dl) {
   if (dl._type === 'web' && dl._rd_download) return true;
   if (dl._type === 'torrent' && (dl.links || []).length > 0) return true;
   return false;
 }
 
-export function getStatus(dl) {
+function getStatus(dl) {
   const s = dl.download_state || '';
   if (!s) return dl.progress >= 1 ? i18n('statusCompleted') : i18n('statusUnknown');
   
@@ -820,7 +819,7 @@ export function getStatus(dl) {
   return stateMap[s] || s.replace(/_/g, ' ');
 }
 
-export function getStatusClass(dl) {
+function getStatusClass(dl) {
   const s = dl.download_state || '';
   if (s === 'completed' || s === 'downloaded') return 'completed';
   if (['downloading', 'uploading', 'compressing', 'processing'].includes(s)) return 'downloading';
@@ -868,7 +867,7 @@ function fileBaseName(str) {
   return idx >= 0 ? str.slice(idx + 1) : str;
 }
 
-export function parseTorrentInfo(info) {
+function parseTorrentInfo(info) {
   const selectedFiles = (info.files || []).filter(f => f.selected === 1);
   return {
     links: info.links || [],
@@ -903,7 +902,7 @@ export async function fetchTorrentFiles(dl, itemEl) {
   }
 }
 
-export async function preloadTorrentFiles() {
+function preloadTorrentFiles() {
   const visibleIds = new Set(state.currentFiltered.slice(0, state.visibleCount).map(d => String(d.id)));
   const needsInfo = state.allDownloads.filter(dl => visibleIds.has(String(dl.id)) && dl._type === 'torrent' && isCompleted(dl) && ((dl.files || []).length === 0 || (dl.links || []).length === 0));
   
@@ -913,7 +912,7 @@ export async function preloadTorrentFiles() {
   const BATCH_SIZE = 3;
   for (let i = 0; i < needsInfo.length; i += BATCH_SIZE) {
     const batch = needsInfo.slice(i, i + BATCH_SIZE);
-    await Promise.allSettled(batch.map(async (dl) => {
+    Promise.allSettled(batch.map(async (dl) => {
       try {
         const info = await apiGet(`/torrents/info/${dl.id}`);
         if (info) {
@@ -925,13 +924,12 @@ export async function preloadTorrentFiles() {
       } catch (err) {
         console.debug(`RD Manager: Preload torrent file infos falhou no ID ${dl.id}.`, err);
       }
-    }));
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-
-  if (changed) {
-    cacheData(state.allDownloads);
-    renderDownloads();
+    })).then(() => {
+      if (changed) {
+        cacheData(state.allDownloads);
+        renderDownloads();
+      }
+    });
   }
 }
 
@@ -1111,7 +1109,7 @@ export async function playFile(type, id) {
   }
 }
 
-export function triggerPlay(url, filename = '') {
+function triggerPlay(url, filename = '') {
   if (!String(url).startsWith('https://') && !String(url).startsWith('http://')) {
     toast(i18n('invalidDlLink'), 'error');
     return;
@@ -1138,7 +1136,7 @@ export function triggerPlay(url, filename = '') {
   }
 }
 
-export async function triggerDownload(url, filename = '') {
+function triggerDownload(url, filename = '') {
   if (!String(url).startsWith('https://') && !String(url).startsWith('http://')) {
     toast(i18n('invalidDlLink'), 'error');
     return;
@@ -1152,33 +1150,35 @@ export async function triggerDownload(url, filename = '') {
       formData.append('autostart', '1');
       if (filename) formData.append('package', filename);
 
-      const res = await fetch(`http://127.0.0.1:${state.jdPort}/flashgot`, {
+      fetch(`http://127.0.0.1:${state.jdPort}/flashgot`, {
         method: 'POST',
         body: formData.toString(),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-      });
+      }).then(res => {
+        if (res.ok) {
+          toast(i18n('addedToJd'), 'success');
+        } else {
+          throw new Error('JD2 Error');
+        }
+      }).catch(err => {
+        const body = el('div', {style: 'text-align: center; padding: 10px;'},
+          el('div', {style: 'margin-bottom: 20px; font-size: 14px;'}, i18n('jdFailedAskBrowser')),
+          el('div', {style: 'display: flex; gap: 10px; justify-content: center;'},
+            el('button', {id: 'btn-jd-no', className: 'form-submit', style: 'flex: 1; background: #f46878 !important; color: #fff !important; border: none !important;'}, i18n('no')),
+            el('button', {id: 'btn-jd-yes', className: 'form-submit', style: 'flex: 1;'}, i18n('yes'))
+          )
+        );
 
-      if (res.ok) {
-        toast(i18n('addedToJd'), 'success');
-      } else {
-        throw new Error('JD2 Error');
-      }
+        openModalWithNode(i18n('jdUnresponsive'), body);
+
+        document.getElementById('btn-jd-no').addEventListener('click', () => closeModal());
+        document.getElementById('btn-jd-yes').addEventListener('click', () => {
+          closeModal();
+          executeBrowserDownload(url);
+        });
+      });
     } catch (err) {
-      const body = el('div', {style: 'text-align: center; padding: 10px;'},
-        el('div', {style: 'margin-bottom: 20px; font-size: 14px;'}, i18n('jdFailedAskBrowser')),
-        el('div', {style: 'display: flex; gap: 10px; justify-content: center;'},
-          el('button', {id: 'btn-jd-no', className: 'form-submit', style: 'flex: 1; background: #f46878 !important; color: #fff !important; border: none !important;'}, i18n('no')),
-          el('button', {id: 'btn-jd-yes', className: 'form-submit', style: 'flex: 1;'}, i18n('yes'))
-        )
-      );
-
-      openModalWithNode(i18n('jdUnresponsive'), body);
-
-      document.getElementById('btn-jd-no').addEventListener('click', () => closeModal());
-      document.getElementById('btn-jd-yes').addEventListener('click', () => {
-        closeModal();
-        executeBrowserDownload(url);
-      });
+      console.warn('RD Manager: Falha sincrona ao contatar JD', err);
     }
     return;
   }
@@ -1346,9 +1346,8 @@ export async function openFileSelectionModal(torrentId) {
 
 let storageQueue = Promise.resolve();
 
-export function saveLocalDownloadsArray(unrestrictResults) {
+function saveLocalDownloadsArray(unrestrictResults) {
   return new Promise((resolve) => {
-    // Item 1: Solução para evitar travamento da fila em caso de erro na Promise encadeada
     storageQueue = storageQueue.then(async () => {
       try {
         const existing = await rdStorage.getLocalDownloads();
@@ -1377,7 +1376,6 @@ export function saveLocalDownloadsArray(unrestrictResults) {
       } catch (err) {
         console.warn('RD Manager: Falha ao salvar downloads locais', err);
       } finally {
-        // Resolve a Promise externa em qualquer cenário para não "congelar" o popup
         resolve();
       }
     });
