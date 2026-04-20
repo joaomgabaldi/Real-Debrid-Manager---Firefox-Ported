@@ -16,7 +16,7 @@ function triggerAuthFailure() {
 }
 
 function handleUnauth(res) {
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
     rdStorage.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
     triggerAuthFailure();
     throw new Error('Unauthenticated');
