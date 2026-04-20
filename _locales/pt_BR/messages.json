@@ -69,8 +69,8 @@
   "dlNotificationsInfo": { "message": "Não enviará requisições em segundo plano se desativado." },
   "hoverLiftLabel": { "message": "Efeito de elevação ao passar o mouse" },
   "hoverLiftDesc": { "message": "Adiciona uma elevação sutil e sombra." },
-  "jd2Label": { "message": "Enviar para o JDownloader 2" },
-  "jd2Desc": { "message": "Envia links para a porta 9666. O JD2 precisa estar aberto." },
+  "jd2Label": { "message": "Enviar para o JDownloader" },
+  "jd2Desc": { "message": "Envia links para a porta 9666. O JD precisa estar aberto." },
   "jdPortLabel": { "message": "Porta do JDownloader" },
   "vlcLabel": { "message": "Abrir no VLC (via M3U)" },
   "vlcDesc": { "message": "Baixa um arquivo .m3u que abre automaticamente no VLC ou no seu player padrão." },
@@ -152,7 +152,7 @@
   "convertPointsTooltip": { "message": "Converter 1000 pontos em 30 dias Premium" },
   "convertPointsSuccess": { "message": "Pontos convertidos! +30 dias" },
   "convertPointsError": { "message": "Erro ao converter pontos" },
-  "play": { "message": "Reproducir" },
+  "play": { "message": "Reproduzir" },
   "startingStream": { "message": "Iniciando stream..." },
   "openInVlc": { "message": "Abrir no VLC" },
   "holdToDelete": { "message": "Segure p/ Excluir" },
@@ -167,9 +167,7 @@
   "errorInvalidSubtitleFormat": { "message": "Formato inválido. Por favor, use um arquivo .SRT ou .VTT." },
   "decodedLinksTitle": { "message": "Links Descriptografados" },
   "copyAllLinks": { "message": "Copiar Tudo" },
-  "copySuccess": { "message": "Copiado para a área de transferência!" },
+  "copySuccess": { "message": "Copiado para a área de clipboard!" },
   "back": { "message": "Voltar" },
-  "exportJd2": { "message": "Exportar p/ JD2" },
-  "exportJd2Success": { "message": "Enviado para o JDownloader 2!" },
-  "exportJd2Error": { "message": "JD2 não responde (porta 9666)" }
+  "exportJd2": { "message": "Enviar para o JD" }
 }
