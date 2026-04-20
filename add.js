@@ -34,7 +34,8 @@ function renderAddForm() {
           el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, i18n('magnetTooltip')))
         )
       ),
-      el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'})
+      el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'}),
+      el('div', {id: 'cache-status-container', style: 'margin-top: 8px; min-height: 20px; font-size: 13px; display: flex; align-items: center;'})
     ),
     el('div', {className: 'form-divider'}, el('span', {}, i18n('or'))),
     el('div', {className: 'form-group'},
@@ -54,7 +55,9 @@ function renderAddForm() {
   const fileBtn = $('#btn-select-torrent');
   const fileName = $('#selected-file-name');
   const submitBtn = $('#submit-torrent');
+  const cacheContainer = $('#cache-status-container');
   let selectedFile = null;
+  let debounceTimer = null;
 
   fileBtn.addEventListener('click', () => fileInput.click());
 
@@ -64,6 +67,7 @@ function renderAddForm() {
       fileName.textContent = selectedFile.name;
       magnetInput.value = '';
       magnetInput.disabled = true;
+      cacheContainer.replaceChildren();
     } else {
       selectedFile = null;
       fileName.textContent = '';
@@ -72,12 +76,49 @@ function renderAddForm() {
   });
 
   magnetInput.addEventListener('input', () => {
-    if (magnetInput.value.trim()) {
+    const val = magnetInput.value.trim();
+    if (val) {
       fileInput.value = '';
       selectedFile = null;
       fileName.textContent = '';
+      
+      clearTimeout(debounceTimer);
+      cacheContainer.replaceChildren();
+      
+      const match = val.match(/xt=urn:btih:([a-zA-Z0-9]+)/i);
+      if (match && match[1]) {
+         const hash = match[1].toLowerCase();
+         cacheContainer.replaceChildren(
+           el('div', {className: 'spinner', style: 'width: 14px; height: 14px; margin-right: 6px; border-width: 2px;'}),
+           el('span', {style: 'color: var(--text-muted);'}, i18n('checkingCache') || 'A verificar disponibilidade...')
+         );
+         
+         debounceTimer = setTimeout(async () => {
+            try {
+               const data = await apiGet(`/torrents/instantAvailability/${hash}`);
+               if (data && data[hash] && data[hash].rd && data[hash].rd.length > 0) {
+                  const checkSvg = makeSvg([['polyline', {points: '20 6 9 17 4 12'}]]);
+                  checkSvg.style.width = '16px'; checkSvg.style.height = '16px'; checkSvg.style.marginRight = '4px'; checkSvg.style.stroke = '#1a9c4a';
+                  cacheContainer.replaceChildren(
+                     checkSvg,
+                     el('span', {style: 'color: #1a9c4a; font-weight: 600;'}, i18n('cachedInstant') || '100% em Cache (Imediato)')
+                  );
+               } else {
+                  const crossSvg = makeSvg([['line', {x1: '18', y1: '6', x2: '6', y2: '18'}], ['line', {x1: '6', y1: '6', x2: '18', y2: '18'}]]);
+                  crossSvg.style.width = '14px'; crossSvg.style.height = '14px'; crossSvg.style.marginRight = '4px'; crossSvg.style.stroke = '#ff8800';
+                  cacheContainer.replaceChildren(
+                     crossSvg,
+                     el('span', {style: 'color: #ff8800; font-weight: 600;'}, i18n('notCached') || 'Não está em cache')
+                  );
+               }
+            } catch (err) {
+               cacheContainer.replaceChildren();
+            }
+         }, 500);
+      }
     } else {
        magnetInput.disabled = false;
+       cacheContainer.replaceChildren();
     }
   });
 
