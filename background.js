@@ -1,4 +1,5 @@
 import { getValidToken, apiGet, apiPost, apiPut, apiDelete, trackId, onAuthFailure } from './api.js';
+import { rdStorage } from './storage.js';
 
 const ALARM_NAME = 'rd-completion-check';
 const POLL_INTERVAL_MINUTES = 1;
@@ -22,7 +23,7 @@ browser.runtime.onStartup.addListener(async () => {
 });
 
 function updateContextMenu() {
-  browser.storage.local.get('rd_context_menu').then((data) => {
+  rdStorage.get('rd_context_menu').then((data) => {
     const enabled = data.rd_context_menu !== false;
     browser.contextMenus.remove('send-to-rd').catch(() => {}).finally(() => {
       if (enabled) {
@@ -77,20 +78,20 @@ browser.alarms.onAlarm.addListener((alarm) => {
 });
 
 async function checkForCompletedDownloads() {
-  const data = await browser.storage.local.get(['rd_notifications_enabled']);
+  const data = await rdStorage.get(['rd_notifications_enabled']);
   if (data.rd_notifications_enabled === false) return;
   const token = await getValidToken();
   if (!token) return;
 
   try {
-    const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
+    const { rd_tracked_ids } = await rdStorage.get('rd_tracked_ids');
     const trackedIds = new Set(rd_tracked_ids || []);
     if (trackedIds.size === 0) return;
 
     const current = [];
     let changedTracked = false;
 
-    const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
+    const { rd_local_downloads } = await rdStorage.get('rd_local_downloads');
     if (Array.isArray(rd_local_downloads)) {
       rd_local_downloads.forEach(d => current.push({ id: String(d.id), name: d.name, type: 'web', ready: true, status: 'downloaded' }));
     }
@@ -119,15 +120,15 @@ async function checkForCompletedDownloads() {
 
     if (justCompleted.length === 0) {
       if (changedTracked) {
-        await browser.storage.local.set({ rd_tracked_ids: [...trackedIds] });
+        await rdStorage.set({ rd_tracked_ids: [...trackedIds] });
       }
       return;
     }
 
     justCompleted.forEach(dl => trackedIds.delete(dl.id));
-    await browser.storage.local.set({ rd_tracked_ids: [...trackedIds] });
+    await rdStorage.set({ rd_tracked_ids: [...trackedIds] });
 
-    const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
+    const { rd_local_notifications } = await rdStorage.get('rd_local_notifications');
     const existing = rd_local_notifications || [];
     
     const merged = [
@@ -145,7 +146,7 @@ async function checkForCompletedDownloads() {
       ...existing,
     ].slice(0, 99);
     
-    await browser.storage.local.set({ rd_local_notifications: merged });
+    await rdStorage.set({ rd_local_notifications: merged });
     await updateBadgeCount();
 
   } catch (err) {
@@ -246,10 +247,10 @@ async function unrestrictLink(link) {
         short_name: data.filename || 'Download',
       }],
     };
-    const { rd_local_downloads } = await browser.storage.local.get('rd_local_downloads');
+    const { rd_local_downloads } = await rdStorage.get('rd_local_downloads');
     const existing = rd_local_downloads || [];
     const merged = [entry, ...existing].slice(0, 99);
-    await browser.storage.local.set({ rd_local_downloads: merged });
+    await rdStorage.set({ rd_local_downloads: merged });
     await trackId(String(entry.id));
   }
 }
@@ -260,7 +261,7 @@ function isReady(dl) {
 }
 
 async function updateBadgeCount() {
-  const { rd_local_notifications } = await browser.storage.local.get('rd_local_notifications');
+  const { rd_local_notifications } = await rdStorage.get('rd_local_notifications');
   const unread = (rd_local_notifications || []).filter(n => !n.read).length;
   if (unread > 0) {
     browser.action.setBadgeText({ text: unread > 99 ? '99+' : String(unread) });
