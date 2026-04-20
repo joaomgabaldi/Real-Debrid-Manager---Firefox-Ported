@@ -148,5 +148,8 @@
   "convertPointsBtn": { "message": "Convert (30 days)" },
   "convertPointsTooltip": { "message": "Convert 1000 points into 30 Premium days" },
   "convertPointsSuccess": { "message": "Points converted! +30 days" },
-  "convertPointsError": { "message": "Error converting points" }
+  "convertPointsError": { "message": "Error converting points" },
+  "play": { "message": "Play" },
+  "startingStream": { "message": "Starting stream..." },
+  "openInVlc": { "message": "Open in VLC" }
 }
