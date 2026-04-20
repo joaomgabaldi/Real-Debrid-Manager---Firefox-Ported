@@ -144,7 +144,7 @@
   "timeRemaining": { "message": "restante (previsto)" },
   "addBtn": { "message": "Añadir" },
   "noFiles": { "message": "No se encontraron archivos." },
-  "addTorrentTitle": { "message": "Añadir Torrents y DLC" },
+  "addTorrentTitle": { "message": "Añadir Torrents y DLCs" },
   "dlFailedTitle": { "message": "Fallo en la Descarga" },
   "dlFailedMessage": { "message": "Ocurrió un error en el archivo." },
   "itemsDeleted": { "message": "elemento(s) eliminado(s)" },
@@ -166,7 +166,10 @@
   "dropSubtitleHere": { "message": "Suelta el subtítulo aquí (.SRT o .VTT)" },
   "errorInvalidSubtitleFormat": { "message": "Formato no válido. Por favor, utiliza un archivo .SRT o .VTT." },
   "decodedLinksTitle": { "message": "Enlaces Descodificados" },
-  "copyAllLinks": { "message": "Copiar Todos los Enlaces" },
+  "copyAllLinks": { "message": "Copiar Todo" },
   "copySuccess": { "message": "¡Copiado al portapapeles!" },
-  "back": { "message": "Volver" }
+  "back": { "message": "Volver" },
+  "exportJd2": { "message": "Exportar a JD2" },
+  "exportJd2Success": { "message": "¡Enviado a JDownloader 2!" },
+  "exportJd2Error": { "message": "JD2 no responde (puerto 9666)" }
 }
