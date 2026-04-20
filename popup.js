@@ -197,6 +197,7 @@ function bindEvents() {
   const deleteAllBtn = DOM.$('#btn-delete-all');
   
   deleteAllBtn.addEventListener('click', (e) => {
+    if (globals.ignoreNextClick) return;
     if (!state.hasValidToken || state.allDownloads.length === 0) return;
     if (!state.selectionMode) {
       toggleSelectionMode(true);
@@ -215,6 +216,10 @@ function bindEvents() {
     globals.deleteAllHoldTimer = setTimeout(() => {
       deleteAllBtn.classList.add('no-transition');
       deleteAllBtn.classList.remove('holding');
+      
+      globals.ignoreNextClick = true;
+      setTimeout(() => { globals.ignoreNextClick = false; }, 1000);
+
       import('./popup-downloads.js').then(m => m.deleteSelected());
     }, 1500);
   });
