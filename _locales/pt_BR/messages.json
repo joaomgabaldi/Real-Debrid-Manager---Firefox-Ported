@@ -167,7 +167,7 @@
   "errorInvalidSubtitleFormat": { "message": "Formato inválido. Por favor, use um arquivo .SRT ou .VTT." },
   "decodedLinksTitle": { "message": "Links Descriptografados" },
   "copyAllLinks": { "message": "Copiar Tudo" },
-  "copySuccess": { "message": "Copiado para a área de clipboard!" },
+  "copySuccess": { "message": "Copiado para a área de transferência!" },
   "back": { "message": "Voltar" },
   "exportJd2": { "message": "Enviar para o JD" }
 }
