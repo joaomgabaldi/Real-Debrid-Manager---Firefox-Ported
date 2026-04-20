@@ -38,7 +38,7 @@ function renderAddForm() {
     ),
     el('div', {className: 'form-divider'}, el('span', {}, i18n('or'))),
     el('div', {className: 'form-group'},
-      el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent,.dlc,.rsdf,.ccf', style: 'display:none'}),
+      el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent,.dlc,.rsdf,.ccf,.ccf3', style: 'display:none'}),
       el('button', {className: 'form-file-btn', id: 'btn-select-torrent', 'aria-label': i18n('selectTorrentFile')}, btnSvg.cloneNode(true), i18n('selectTorrentFile')),
       el('div', {className: 'form-file-name', id: 'selected-file-name'})
     ),
@@ -92,52 +92,44 @@ function renderAddForm() {
     submitBtn.classList.add('loading');
     submitBtn.replaceChildren(i18n('adding'), el('span', {className: 'btn-spinner'}));
 
-    try {
-      if (file && (file.name.toLowerCase().endsWith('.dlc') || file.name.toLowerCase().endsWith('.rsdf') || file.name.toLowerCase().endsWith('.ccf'))) {
+    if (file && (file.name.toLowerCase().endsWith('.dlc') || 
+                 file.name.toLowerCase().endsWith('.rsdf') || 
+                 file.name.toLowerCase().endsWith('.ccf') ||
+                 file.name.toLowerCase().endsWith('.ccf3'))) {
+      try {
+        const responseData = await apiPut('/unrestrict/containerFile', file, 'application/octet-stream');
         
-        try {
-          // Extração explícita do conteúdo do arquivo como string base
-          const dlcText = await file.text();
-          
-          // Conversão da string para um Blob nativo. Isso assegura que o payload seja interpretado
-          // pelo fetch como um corpo binário puro sem formatação de formulário em volta.
-          const rawBlob = new Blob([dlcText]);
-          
-          const responseData = await apiPut('/unrestrict/containerFile', rawBlob, 'application/octet-stream');
-          
-          let extractedLinks = [];
-          if (Array.isArray(responseData)) {
-            extractedLinks = responseData;
-          } else if (responseData && Array.isArray(responseData.links)) {
-            extractedLinks = responseData.links;
-          } else if (responseData && typeof responseData === 'object') {
-            extractedLinks = Object.values(responseData);
-          } else if (typeof responseData === 'string') {
-            extractedLinks = [responseData];
-          }
+        let extractedLinks = [];
+        if (Array.isArray(responseData)) {
+          extractedLinks = responseData;
+        } else if (responseData && Array.isArray(responseData.links)) {
+          extractedLinks = responseData.links;
+        } else if (responseData && typeof responseData === 'object') {
+          extractedLinks = Object.values(responseData).filter(v => typeof v === 'string');
+        } else if (typeof responseData === 'string') {
+          extractedLinks = [responseData];
+        }
 
-          const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
+        const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
 
-          if (validLinks.length === 0) {
-            toast('A API do Real-Debrid processou o arquivo mas não extraiu links.', 'error');
-            submitBtn.disabled = false;
-            submitBtn.classList.remove('loading');
-            submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
-            return;
-          }
-
+        if (validLinks.length === 0) {
+          toast('Nenhum link foi extraído do container.', 'error');
+        } else {
           renderDecodedLinks(validLinks);
           return;
-        } catch (err) {
-          console.warn('RD Manager: Falha ao processar container na API pública', err);
-          toast('Falha técnica ao descriptografar arquivo na API.', 'error');
-          submitBtn.disabled = false;
-          submitBtn.classList.remove('loading');
-          submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
-          return;
         }
+      } catch (err) {
+        console.warn('RD Manager: Falha ao processar container', err);
+        toast('Falha ao descriptografar o arquivo container.', 'error');
       }
+      
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('loading');
+      submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
+      return;
+    }
 
+    try {
       let torrentId = null;
       if (file) {
         const data = await apiPut('/torrents/addTorrent', file);
