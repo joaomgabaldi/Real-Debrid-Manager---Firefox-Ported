@@ -272,7 +272,8 @@ export async function forceLogout(msg = null) {
   await browser.storage.local.remove([
     'rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 
     'rd_oauth_client_secret', 'rd_token_expires_at', 'rd_cached_user', 
-    'rd_cached_downloads', 'rd_oauth_pending'
+    'rd_cached_downloads', 'rd_oauth_pending','rd_ignore_locks', 
+    'rd_tracked_ids', 'rd_local_notifications', 'rd_local_downloads'
   ]);
   state.allDownloads = [];
   
