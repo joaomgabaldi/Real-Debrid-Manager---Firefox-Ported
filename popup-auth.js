@@ -119,7 +119,16 @@ export function showAuthModal(autoStartOauth = false) {
           await apiPost('/settings/convertPoints');
           toast(i18n('convertPointsSuccess'), 'success');
           
-          import('./popup-downloads.js').then(m => m.fetchUserInfo());
+          const popupDownloads = await import('./popup-downloads.js');
+          await popupDownloads.fetchUserInfo();
+          
+          const freshData = await browser.storage.local.get('rd_cached_user');
+          if (freshData.rd_cached_user) {
+            const pointsEl = document.querySelector('.settings-account-points');
+            if (pointsEl) {
+              pointsEl.textContent = `${freshData.rd_cached_user.points.toLocaleString()} ${i18n('points')}`;
+            }
+          }
           
           btnConvert.style.display = 'none'; 
         } catch (err) {
