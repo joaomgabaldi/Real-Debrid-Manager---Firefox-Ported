@@ -1096,7 +1096,7 @@ export async function playFile(type, id) {
       }
 
       if (links.length > 0) {
-        toast(i18n('startingStream'), 'success');
+        toast(state.useVlc ? (i18n('sendingToVlc') || 'Abrindo no VLC...') : i18n('startingStream'), 'success');
         const unrestricted = await apiPost('/unrestrict/link', { link: links[0] });
         if (unrestricted?.download) triggerPlay(unrestricted.download, dl.name);
         else toast(i18n('failedDlLink'), 'error');
@@ -1117,8 +1117,17 @@ export function triggerPlay(url, filename = '') {
     return;
   }
   
-  const playerUrl = browser.runtime.getURL(`player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(filename)}`);
-  browser.tabs.create({ url: playerUrl });
+  if (state.useVlc) {
+    const a = document.createElement('a');
+    a.href = 'vlc://' + url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } else {
+    const playerUrl = browser.runtime.getURL(`player.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(filename)}`);
+    browser.tabs.create({ url: playerUrl });
+  }
 }
 
 export async function triggerDownload(url, filename = '') {
