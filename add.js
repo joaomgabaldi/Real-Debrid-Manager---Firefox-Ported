@@ -96,7 +96,9 @@ function renderAddForm() {
       if (file && (file.name.toLowerCase().endsWith('.dlc') || file.name.toLowerCase().endsWith('.rsdf') || file.name.toLowerCase().endsWith('.ccf'))) {
         
         try {
-          const responseData = await apiPut('/unrestrict/containerFile', file);
+          // Lendo o arquivo como ArrayBuffer e forçando o Content-Type como octet-stream (igual ao PowerShell)
+          const buffer = await file.arrayBuffer();
+          const responseData = await apiPut('/unrestrict/containerFile', buffer, 'application/octet-stream');
           
           let extractedLinks = [];
           if (Array.isArray(responseData)) {
@@ -109,8 +111,6 @@ function renderAddForm() {
             extractedLinks = [responseData];
           }
 
-          // Filtro agressivo para isolar apenas strings válidas de URLs HTTP. 
-          // Remove arrays em branco, quebras de linha isoladas e metadados falhos.
           const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
 
           if (validLinks.length === 0) {
@@ -135,6 +135,7 @@ function renderAddForm() {
 
       let torrentId = null;
       if (file) {
+        // Torrents normais não precisam de Content-Type forçado
         const data = await apiPut('/torrents/addTorrent', file);
         torrentId = data?.id;
       } else {
