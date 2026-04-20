@@ -26,7 +26,8 @@ export async function getValidToken() {
   const data = await browser.storage.local.get(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at']);
   if (!data.rd_access_token) return null;
 
-  if (Date.now() >= data.rd_token_expires_at) {
+  const bufferMs = 300000;
+  if (Date.now() >= (data.rd_token_expires_at - bufferMs)) {
     if (!data.rd_refresh_token) {
       triggerAuthFailure();
       return null;
