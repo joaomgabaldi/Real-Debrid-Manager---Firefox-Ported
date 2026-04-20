@@ -1,235 +1,159 @@
-import { getValidToken, apiGet, apiPost, apiPut, trackId, onAuthFailure } from './api.js';
-import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast } from './utils.js';
+export const API_BASE = 'https://api.real-debrid.com/rest/1.0';
+export const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
+const CLIENT_ID = 'X245A4XAIBGVM';
 
-const $ = (sel) => document.querySelector(sel);
+let authFailureCallbacks = [];
 
-document.addEventListener('DOMContentLoaded', async () => {
-  localizeHtmlPage();
-  const { rd_theme } = await browser.storage.local.get('rd_theme');
-  document.documentElement.setAttribute('data-theme', rd_theme || 'dark');
+export function onAuthFailure(cb) {
+  authFailureCallbacks.push(cb);
+}
 
-  onAuthFailure(() => {
-    $('#content').replaceChildren(el('div', {className: 'state-message'}, i18n('accessRevoked')));
-    setTimeout(() => window.close(), 2500);
-  });
+function triggerAuthFailure() {
+  authFailureCallbacks.forEach(cb => cb());
+}
 
+function handleUnauth(res) {
+  if (res.status === 401 || res.status === 403) {
+    browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
+    triggerAuthFailure();
+    throw new Error('Unauthenticated');
+  }
+}
+
+export async function getValidToken() {
+  const data = await browser.storage.local.get(['rd_access_token', 'rd_refresh_token', 'rd_oauth_client_id', 'rd_oauth_client_secret', 'rd_token_expires_at']);
+  if (!data.rd_access_token) return null;
+
+  if (Date.now() >= data.rd_token_expires_at) {
+    if (!data.rd_refresh_token) {
+      triggerAuthFailure();
+      return null;
+    }
+    return await refreshAccessToken(data.rd_refresh_token, data.rd_oauth_client_id, data.rd_oauth_client_secret);
+  }
+  return data.rd_access_token;
+}
+
+async function refreshAccessToken(refreshToken, clientId, clientSecret) {
+  try {
+    const res = await fetch(`${OAUTH_BASE}/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: 'http://oauth.net/grant_type/device/1.0'
+      }).toString()
+    });
+
+    if (!res.ok) {
+      await browser.storage.local.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
+      triggerAuthFailure();
+      return null;
+    }
+
+    const tokenData = await res.json();
+    const expiry = Date.now() + (tokenData.expires_in * 1000);
+    await browser.storage.local.set({
+      rd_access_token: tokenData.access_token,
+      rd_refresh_token: tokenData.refresh_token || refreshToken,
+      rd_token_expires_at: expiry
+    });
+
+    return tokenData.access_token;
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function apiGet(endpoint) {
   const token = await getValidToken();
-  if (!token) {
-    $('#content').replaceChildren(el('div', {className: 'state-message'}, i18n('authFirst')));
-    return;
-  }
-  renderAddForm();
-});
+  if (!token) throw new Error('Unauthenticated');
 
-function initFixedTooltips() {
-  document.querySelectorAll('.info-icon:not(.tooltip-inited)').forEach(icon => {
-    icon.classList.add('tooltip-inited');
-    const tip = icon.querySelector('.info-tooltip');
-    if (!tip) return;
-    icon.addEventListener('mouseenter', () => {
-      const iconRect = icon.getBoundingClientRect();
-      const bodyRect = document.body.getBoundingClientRect();
-      tip.style.position = 'fixed';
-      tip.style.visibility = 'hidden';
-      tip.classList.add('visible');
-      const tipWidth = tip.offsetWidth;
-      tip.style.visibility = '';
-      tip.style.left = `${bodyRect.left + (bodyRect.width - tipWidth) / 2}px`;
-      tip.style.top = `${iconRect.bottom + 6}px`;
-    });
-    icon.addEventListener('mouseleave', () => {
-      tip.classList.remove('visible');
-      tip.style.position = '';
-      tip.style.left = '';
-      tip.style.top = '';
-    });
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
   });
+
+  handleUnauth(res);
+
+  if (!res.ok) throw new Error(`API GET Error: ${res.status}`);
+  return res.json();
 }
 
-function renderAddForm() {
-  const infoIconSvg = makeSvg([['circle',{cx:'12',cy:'12',r:'10'}],['line',{x1:'12',y1:'16',x2:'12',y2:'12'}],['line',{x1:'12',y1:'8',x2:'12.01',y2:'8'}]]);
-  const btnSvg = makeSvg([['path',{d:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'}],['polyline',{points:'14 2 14 8 20 8'}]]);
+export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeoutMs = 0) {
+  const token = await getValidToken();
+  if (!token) throw new Error('Unauthenticated');
 
-  const form = el('div', {},
-    el('div', {className: 'form-group'},
-      el('div', {className: 'form-label-row'},
-        el('div', {className: 'form-label-left'},
-          el('label', {className: 'form-label'}, i18n('magnetLabel')),
-          el('span', {className: 'info-icon'}, infoIconSvg.cloneNode(true), el('span', {className: 'info-tooltip'}, i18n('magnetTooltip')))
-        )
-      ),
-      el('textarea', {className: 'form-input', id: 'input-magnet', placeholder: 'magnet:?xt=urn:btih:...', rows: '5', spellcheck: 'false'})
-    ),
-    el('div', {className: 'form-divider'}, el('span', {}, i18n('or'))),
-    el('div', {className: 'form-group'},
-      el('input', {type: 'file', id: 'input-torrent-file', accept: '.torrent', style: 'display:none'}),
-      el('button', {className: 'form-file-btn', id: 'btn-select-torrent'}, btnSvg.cloneNode(true), i18n('selectTorrentFile')),
-      el('div', {className: 'form-file-name', id: 'selected-file-name'})
-    ),
-    el('button', {className: 'form-submit', id: 'submit-torrent'}, i18n('addBtn'), el('span', {className: 'btn-spinner'}))
-  );
+  let body = bodyData;
+  let headers = { 'Authorization': `Bearer ${token}` };
 
-  $('#content').replaceChildren(form);
-  
-  initFixedTooltips();
+  if (isFormUrlEncoded) {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    body = new URLSearchParams(bodyData).toString();
+  }
 
-  const magnetInput = $('#input-magnet');
-  const fileInput = $('#input-torrent-file');
-  const fileBtn = $('#btn-select-torrent');
-  const fileName = $('#selected-file-name');
-  const submitBtn = $('#submit-torrent');
-  let selectedFile = null;
+  const fetchOptions = { method: 'POST', headers, body };
 
-  fileBtn.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files.length > 0) {
-      selectedFile = fileInput.files[0];
-      fileName.textContent = selectedFile.name;
-      magnetInput.value = '';
-      magnetInput.disabled = true;
-    } else {
-      selectedFile = null;
-      fileName.textContent = '';
-      magnetInput.disabled = false;
-    }
-  });
-
-  magnetInput.addEventListener('input', () => {
-    if (magnetInput.value.trim()) {
-      fileInput.value = '';
-      selectedFile = null;
-      fileName.textContent = '';
-    } else {
-       magnetInput.disabled = false;
-    }
-  });
-
-  submitBtn.addEventListener('click', async () => {
-    const magnet = magnetInput.value.trim();
-    const file = selectedFile;
-
-    if (!magnet && !file) return toast(i18n('insertMagnetOrFile'), 'error');
-
-    submitBtn.disabled = true;
-    submitBtn.classList.add('loading');
-    submitBtn.replaceChildren(i18n('adding'), el('span', {className: 'btn-spinner'}));
-
+  if (timeoutMs > 0) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    fetchOptions.signal = controller.signal;
     try {
-      let torrentId = null;
-      if (file) {
-        const data = await apiPut('/torrents/addTorrent', file);
-        torrentId = data?.id;
-      } else {
-        const data = await apiPost('/torrents/addMagnet', { magnet: magnet });
-        torrentId = data?.id;
-      }
-
-      if (torrentId) {
-        await trackId(String(torrentId));
-        toast(i18n('addedVerifying'), 'success');
-        await handleFileSelection(torrentId);
-      }
+      const res = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
+      clearTimeout(id);
+      handleUnauth(res);
+      if (!res.ok) throw new Error(`API POST Error: ${res.status}`);
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
     } catch (err) {
-      if (err.message === 'Unauthenticated') return;
-      toast(i18n('failedAdd'), 'error');
-      submitBtn.disabled = false;
-      submitBtn.classList.remove('loading');
-      submitBtn.replaceChildren(i18n('addBtn'), el('span', {className: 'btn-spinner'}));
+      clearTimeout(id);
+      throw err;
     }
-  });
-
-  setTimeout(() => magnetInput.focus(), 100);
+  } else {
+    const res = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
+    handleUnauth(res);
+    if (!res.ok) throw new Error(`API POST Error: ${res.status}`);
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
 }
 
-async function handleFileSelection(torrentId) {
-  $('#content').replaceChildren(el('div', {className: 'state-message', style: 'padding: 40px 0;'},
-    el('div', {className: 'spinner'}),
-    el('span', {style: 'margin-top: 10px; display: block;'}, i18n('waitingConversion'))
-  ));
+export async function apiPut(endpoint, blobData) {
+  const token = await getValidToken();
+  if (!token) throw new Error('Unauthenticated');
 
-  let info;
-  let attempts = 0;
-  while (attempts < 60) {
-    try {
-      info = await apiGet(`/torrents/info/${torrentId}`);
-      if (info && info.status !== 'magnet_conversion') break;
-    } catch (err) {
-      if (err.message === 'Unauthenticated') return;
-    }
-    await new Promise(r => setTimeout(r, 1000));
-    attempts++;
-  }
-
-  if (!info || info.status === 'error' || info.status === 'dead') {
-    toast(i18n('errorProcessClose'), 'error');
-    setTimeout(() => window.close(), 2500);
-    return;
-  }
-
-  if (info.status !== 'waiting_files_selection') {
-    toast(i18n('addedSuccess'), 'success');
-    browser.runtime.sendMessage('rd-check-now');
-    setTimeout(() => window.close(), 1500);
-    return;
-  }
-
-  if (!info.files || info.files.length === 0) {
-    toast(i18n('noFiles'), 'error');
-    setTimeout(() => window.close(), 2500);
-    return;
-  }
-
-  const fileList = el('ul', {className: 'dl-files-list', style: 'max-height: 250px; overflow-y: auto; overflow-x: hidden; margin: 10px 0; background: var(--bg-hover, rgba(0,0,0,0.1)); border-radius: 6px; padding: 5px; list-style: none;'});
-  const checkboxes = [];
-
-  info.files.forEach(f => {
-    const cb = el('input', {type: 'checkbox', checked: 'checked', value: String(f.id), style: 'margin-right: 10px; cursor: pointer; flex-shrink: 0;'});
-    const li = el('li', {className: 'dl-file-item', style: 'display: flex; align-items: center; padding: 8px 5px; cursor: pointer; border-bottom: 1px solid var(--border-color, #333);'},
-      cb,
-      el('span', {className: 'dl-file-name', style: 'flex: 1; word-break: break-all; font-size: 13px;'}, f.path.replace(/^\//, '')),
-      el('span', {className: 'dl-file-size', style: 'white-space: nowrap; margin-left: 10px; color: var(--text-muted, #888); font-size: 12px;'}, formatBytes(f.bytes))
-    );
-    li.addEventListener('click', (e) => {
-      if (e.target !== cb) cb.checked = !cb.checked;
-    });
-    fileList.appendChild(li);
-    checkboxes.push(cb);
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'PUT',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: blobData
   });
 
-  if (fileList.lastChild) fileList.lastChild.style.borderBottom = 'none';
+  handleUnauth(res);
 
-  const selectAllBtn = el('button', {className: 'action-btn ghost', style: 'margin-bottom: 10px; width: 100%; justify-content: center;'}, i18n('selectAll'));
-  selectAllBtn.addEventListener('click', () => {
-    const allChecked = checkboxes.every(c => c.checked);
-    checkboxes.forEach(c => c.checked = !allChecked);
+  if (!res.ok) throw new Error(`API PUT Error: ${res.status}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+export async function apiDelete(endpoint) {
+  const token = await getValidToken();
+  if (!token) throw new Error('Unauthenticated');
+
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` }
   });
 
-  const confirmBtn = el('button', {className: 'form-submit', style: 'width: 100%; margin-top: 10px;'}, i18n('startDownload'));
+  handleUnauth(res);
 
-  confirmBtn.addEventListener('click', async () => {
-    const selected = checkboxes.filter(c => c.checked).map(c => c.value);
-    if (selected.length === 0) return toast(i18n('selectAtLeastOne'), 'error');
+  if (!res.ok) throw new Error(`API DELETE Error: ${res.status}`);
+  return true;
+}
 
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = i18n('starting');
-    try {
-      await apiPost(`/torrents/selectFiles/${torrentId}`, { files: selected.join(',') });
-      toast(i18n('filesSelectedClose'), 'success');
-      browser.runtime.sendMessage('rd-check-now');
-      setTimeout(() => window.close(), 1500); 
-    } catch (err) {
-      if (err.message === 'Unauthenticated') return;
-      toast(i18n('failedStart'), 'error');
-      confirmBtn.disabled = false;
-      confirmBtn.textContent = i18n('startDownload');
-    }
-  });
-
-  $('#content').replaceChildren(el('div', {},
-    el('div', {style: 'font-weight: 600; margin-bottom: 10px;'}, i18n('selectFilesToDl')),
-    selectAllBtn,
-    fileList,
-    confirmBtn
-  ));
+export async function trackId(id) {
+  const { rd_tracked_ids } = await browser.storage.local.get('rd_tracked_ids');
+  const set = new Set(rd_tracked_ids || []);
+  set.add(id);
+  await browser.storage.local.set({ rd_tracked_ids: [...set] });
 }
