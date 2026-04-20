@@ -64,6 +64,7 @@
   "delete": { "message": "Eliminar" },
   "contextMenuLabel": { "message": "Menú contextual de clic derecho" },
   "contextMenuDesc": { "message": "Mostrar \"Enviar a RD Manager\" al hacer clic derecho en los enlaces." },
+  "contextMenuTitle": { "message": "Enviar a RD Manager" },
   "dlNotificationsLabel": { "message": "Notificaciones de descarga" },
   "dlNotificationsDesc": { "message": "Notificarme cuando las descargas estén listas." },
   "dlNotificationsInfo": { "message": "No enviará solicitudes en segundo plano si está desactivado." },
