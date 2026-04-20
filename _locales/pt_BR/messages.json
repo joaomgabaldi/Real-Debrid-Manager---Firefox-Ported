@@ -144,7 +144,7 @@
   "timeRemaining": { "message": "restante (previsto)" },
   "addBtn": { "message": "Adicionar" },
   "noFiles": { "message": "Nenhum arquivo encontrado." },
-  "addTorrentTitle": { "message": "Adicionar Torrents & Links" },
+  "addTorrentTitle": { "message": "Adicionar Torrents & DLCs" },
   "dlFailedTitle": { "message": "Falha no Download" },
   "dlFailedMessage": { "message": "Ocorreu um erro no arquivo." },
   "itemsDeleted": { "message": "item(ns) excluído(s)" },
