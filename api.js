@@ -3,8 +3,8 @@ export const OAUTH_BASE = 'https://api.real-debrid.com/oauth/v2';
 export const OAUTH_CLIENT_ID = 'X245A4XAIBGVM';
 
 const authFailureCallbacks = new Set();
-let refreshPromise = null; // Mutex para refresh de token
-let trackQueue = Promise.resolve(); // Fila para evitar race conditions no trackId
+let refreshPromise = null;
+let trackQueue = Promise.resolve();
 
 export function onAuthFailure(cb) {
   authFailureCallbacks.add(cb);
@@ -32,7 +32,6 @@ export async function getValidToken() {
       return null;
     }
     
-    // Proteção contra múltiplas chamadas de refresh simultâneas (Race Condition)
     if (refreshPromise) {
       return refreshPromise;
     }
