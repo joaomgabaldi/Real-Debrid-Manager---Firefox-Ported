@@ -72,7 +72,7 @@
   "jd2Label": { "message": "Send to JDownloader 2" },
   "jd2Desc": { "message": "Sends links to port 9666. JD2 must be open." },
   "jdPortLabel": { "message": "JDownloader Port" },
-  "vlcLabel": { "message": "Export as M3U" },
+  "vlcLabel": { "message": "Open natively in VLC (via M3U)" },
   "vlcDesc": { "message": "Downloads an .m3u file that opens automatically in VLC or your default player." },
   "sendingToVlc": { "message": "Generating VLC file..." },
   "points": { "message": "Fidelity Points" },
@@ -165,7 +165,8 @@
   "downloadNameFallback": { "message": "Download" },
   "dropSubtitleHere": { "message": "Drop subtitle here (.SRT or .VTT)" },
   "errorInvalidSubtitleFormat": { "message": "Invalid format. Please use a .SRT or .VTT file." },
-  "checkingCache": { "message": "Checking availability..." },
-  "cachedInstant": { "message": "100% Cached (Instant)" },
-  "notCached": { "message": "Uncached (Requires download)" }
+  "decodedLinksTitle": { "message": "Decoded Links" },
+  "copyAllLinks": { "message": "Copy All Links" },
+  "copySuccess": { "message": "Copied to clipboard!" },
+  "back": { "message": "Back" }
 }
