@@ -1,5 +1,5 @@
 import { getValidToken, apiGet, apiPost, apiPut, trackId, onAuthFailure } from './api.js';
-import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast, initFixedTooltips } from './utils.js';
+import { i18n, localizeHtmlPage, el, makeSvg, formatBytes, toast, initFixedTooltips, sendToJDownloader } from './utils.js';
 import { rdStorage } from './storage.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -97,9 +97,7 @@ function renderAddForm() {
                  file.name.toLowerCase().endsWith('.ccf') ||
                  file.name.toLowerCase().endsWith('.ccf3'))) {
       try {
-        const dlcText = await file.text();
-        const rawBlob = new Blob([dlcText]);
-        const responseData = await apiPut('/unrestrict/containerFile', rawBlob, 'application/octet-stream');
+        const responseData = await apiPut('/unrestrict/containerFile', file, 'application/octet-stream');
         
         let extractedLinks = [];
         if (Array.isArray(responseData)) {
@@ -115,7 +113,7 @@ function renderAddForm() {
         const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
 
         if (validLinks.length === 0) {
-          toast('Nenhum link suportado foi extraído do container.', 'error');
+          toast('Nenhum link foi extraído do container.', 'error');
         } else {
           renderDecodedLinks(validLinks);
           return;
@@ -192,6 +190,7 @@ function renderDecodedLinks(links) {
 
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(links.join('\n')).then(() => {
+      // ---> TOAST SENDO CHAMADO AQUI <---
       toast(i18n('copySuccess'), 'success');
     });
   });
@@ -202,23 +201,26 @@ function renderDecodedLinks(links) {
   }, i18n('exportJd2'));
 
   jdBtn.addEventListener('click', async () => {
-    jdBtn.disabled = true;
+    if (jdBtn.classList.contains('loading')) return;
+    jdBtn.classList.add('loading');
     jdBtn.style.opacity = '0.7';
+    
+    // ---> TOAST SENDO CHAMADO AQUI <---
     toast(i18n('sendingToJd'), 'info');
     
     try {
-      const { rd_jd_port } = await rdStorage.get('rd_jd_port');
-      const port = rd_jd_port || '9666';
-      const urlString = encodeURIComponent(links.join('\r\n'));
-      const jdUrl = `http://127.0.0.1:${port}/flash/add?source=RDManager&urls=${urlString}`;
-
-      await fetch(jdUrl, { mode: 'no-cors' });
+      // Agora usa a função oficial que já tem os fallbacks anti-CORS da sua tela principal
+      await sendToJDownloader(links.join('\r\n'));
+      
+      // ---> TOAST DE SUCESSO AQUI <---
       toast(i18n('addedToJd'), 'success');
     } catch (err) {
       console.warn('RD Manager: Erro ao enviar para JD', err);
+      
+      // ---> TOAST DE ERRO AQUI <---
       toast(i18n('jdUnresponsive'), 'error');
     } finally {
-      jdBtn.disabled = false;
+      jdBtn.classList.remove('loading');
       jdBtn.style.opacity = '1';
     }
   });
