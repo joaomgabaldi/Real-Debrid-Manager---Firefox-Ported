@@ -69,8 +69,28 @@ async function bootExtension() {
   state.cachedNotificationsEnabled = data.rd_notifications_enabled !== false;
   state.selectionMode = false;
   
+  // Solução para o Item 6: Purge de ignoreAutoLockIds no carregamento (bootExtension)
   if (data.rd_ignore_locks && Array.isArray(data.rd_ignore_locks)) {
-    state.ignoreAutoLockIds = new Set(data.rd_ignore_locks);
+    const loadedIgnoreSet = new Set(data.rd_ignore_locks);
+    
+    if (data.rd_cached_downloads && Array.isArray(data.rd_cached_downloads)) {
+      const cachedIds = new Set(data.rd_cached_downloads.map(d => String(d.id)));
+      let hasChanged = false;
+
+      for (const id of loadedIgnoreSet) {
+        if (!cachedIds.has(id)) {
+          loadedIgnoreSet.delete(id);
+          hasChanged = true;
+        }
+      }
+
+      if (hasChanged) {
+        browser.storage.local.set({ rd_ignore_locks: Array.from(loadedIgnoreSet) });
+      }
+    }
+    state.ignoreAutoLockIds = loadedIgnoreSet;
+  } else {
+    state.ignoreAutoLockIds = new Set();
   }
 
   const token = await getValidToken();
