@@ -209,7 +209,7 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
     
-    const targetOrigin = `${urlObj.protocol}//${urlObj.host}/*`;
+    const targetOrigin = `*://${urlObj.host}/*`;
     
     try {
       const granted = await browser.permissions.request({ origins: [targetOrigin] });
