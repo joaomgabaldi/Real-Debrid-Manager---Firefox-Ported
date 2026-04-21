@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="popup.css">
   <style>
     body { 
-      width: 350px !important;
-      min-height: 400px; 
+      width: 100% !important;
+      min-height: 100vh; max-height: 100vh; 
       background: var(--bg-base); 
       display: flex; flex-direction: column; overflow: hidden; 
     }
@@ -39,7 +39,10 @@
   </div>
 
   <div id="content">
+    <div class="state-message">
+      <div class="spinner"></div>
     </div>
+  </div>
 
   <div id="toast-container"></div>
 
