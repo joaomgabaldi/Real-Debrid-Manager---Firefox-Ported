@@ -200,19 +200,8 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   if (isTorrentFile) {
-    let urlObj;
     try {
-      urlObj = new URL(url);
-    } catch (err) {
-      console.warn('RD Manager: URL inválida para extração de origem:', err);
-      showBadge(false);
-      return;
-    }
-    
-    const targetOrigin = `*://${urlObj.host}/*`;
-    
-    try {
-      const granted = await browser.permissions.request({ origins: [targetOrigin] });
+      const granted = await browser.permissions.request({ origins: ['<all_urls>'] });
       if (!granted) {
         showBadge(false);
         return;
