@@ -1,94 +1,71 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
   <meta charset="UTF-8">
-  <title>RD Manager Player</title>
-  <link rel="stylesheet" href="popup.css">
-  <link rel="stylesheet" href="plyr.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RD Player</title>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: #000;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .main-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
-    #drop-zone {
-      flex: 1;
-      position: relative;
-    }
-    #player {
-      width: 100%;
-      height: 100%;
-    }
-    .header {
-      padding: 10px 20px;
-      background: rgba(30, 30, 30, 0.9);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      color: #fff;
-      z-index: 10;
-    }
-    #title {
-      font-size: 16px;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-right: 20px;
-    }
-    .actions {
-      display: flex;
-      gap: 10px;
-    }
+    body { margin: 0; background: #000; display: flex; flex-direction: column; height: 100vh; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+    #header { padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; background: #111; border-bottom: 1px solid #333; flex-shrink: 0; }
+    #title { font-size: 15px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; color: #eee; }
+    .actions { display: flex; gap: 10px; }
+    .btn { background: #1a9c4a; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-vlc { background: #ff8800; }
+    .video-container { flex: 1; display: flex; justify-content: center; align-items: center; background: #000; position: relative; }
+    video { width: 100%; height: 100%; outline: none; z-index: 1; }
+    .icon { width: 16px; height: 16px; fill: currentColor; }
+    .icon-stroke { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    
+    /* Estilos do Drag and Drop de Legendas */
     #drag-overlay {
       position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 123, 255, 0.3);
-      border: 2px dashed #007bff;
-      display: none;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      color: #1a9c4a;
+      display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      color: #fff;
-      font-size: 24px;
+      font-size: 20px;
+      font-weight: 600;
+      opacity: 0;
       pointer-events: none;
-      z-index: 100;
+      transition: opacity 0.2s ease-in-out;
+      z-index: 10;
+      border: 4px dashed #1a9c4a;
+      box-sizing: border-box;
     }
-    #drag-overlay.active {
-      display: flex;
-    }
+    #drag-overlay.active { opacity: 1; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div id="title">RD Manager Player</div>
+  <div id="header">
+    <div id="title" class="title" data-i18n="loading"></div>
     <div class="actions">
-      <a id="btn-dl" class="btn" download data-i18n="btnDownload">Download</a>
-      <a id="btn-vlc" class="btn">VLC</a>
+      <a href="#" id="btn-vlc" class="btn btn-vlc" data-i18n-title="openInVlc">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 2L4 20h16L12 2z M4 15h16 M6 10h12" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        <span data-i18n="openInVlc">VLC</span>
+      </a>
+      <a href="#" id="btn-dl" class="btn" data-i18n-title="download">
+        <svg class="icon-stroke" viewBox="0 0 24 24"><path d="M12 3v10"/><polyline points="8 9 12 14 16 9"/><path d="M3 17v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2"/></svg>
+        <span data-i18n="download">Download</span>
+      </a>
+    </div>
+  </div>
+  
+  <div class="video-container" id="drop-zone">
+    <video id="player" controls autoplay></video>
+    <div id="drag-overlay">
+      <svg class="icon-stroke" viewBox="0 0 24 24" style="width: 64px; height: 64px; margin-bottom: 16px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+        <span data-i18n="dropSubtitleHere"></span>
     </div>
   </div>
 
-  <div class="main-container">
-    <div id="drop-zone">
-      <div id="drag-overlay" data-i18n="dropSubtitleHint">Solte a legenda aqui</div>
-      <video id="player" playsinline controls></video>
-    </div>
-  </div>
-
-  <script src="plyr.js"></script>
   <script type="module" src="player.js"></script>
 </body>
 </html>
