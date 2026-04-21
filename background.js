@@ -95,13 +95,18 @@ browser.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+let isCheckingCompletion = false;
+
 async function checkForCompletedDownloads() {
-  const data = await rdStorage.get(['rd_notifications_enabled']);
-  if (data.rd_notifications_enabled === false) return;
-  const token = await getValidToken();
-  if (!token) return;
+  if (isCheckingCompletion) return;
+  isCheckingCompletion = true;
 
   try {
+    const data = await rdStorage.get(['rd_notifications_enabled']);
+    if (data.rd_notifications_enabled === false) return;
+    const token = await getValidToken();
+    if (!token) return;
+
     const { rd_tracked_ids } = await rdStorage.get('rd_tracked_ids');
     const trackedIds = new Set(rd_tracked_ids || []);
     if (trackedIds.size === 0) return;
@@ -169,6 +174,8 @@ async function checkForCompletedDownloads() {
 
   } catch (err) {
     console.warn('RD Manager: Falha no completion check', err);
+  } finally {
+    isCheckingCompletion = false;
   }
 }
 
