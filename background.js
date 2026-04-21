@@ -5,6 +5,24 @@ const ALARM_NAME = 'rd-completion-check';
 const POLL_INTERVAL_MINUTES = 1;
 const DEFAULT_BADGE_COLOR = '#1a9c4a';
 
+function getFranceISOString() {
+  const d = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', { 
+    timeZone: 'Europe/Paris', 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit', 
+    hour12: false 
+  });
+  const parts = formatter.formatToParts(d);
+  const p = {};
+  parts.forEach(({ type, value }) => { p[type] = value; });
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}.000Z`;
+}
+
 onAuthFailure(async () => {
   console.warn('RD Manager: Falha de autenticação detetada em background.');
   await browser.alarms.clear(ALARM_NAME);
@@ -139,7 +157,7 @@ async function checkForCompletedDownloads() {
           title: isError ? browser.i18n.getMessage('dlFailedTitle') : browser.i18n.getMessage('dlAvailable'),
           message: dl.name || (isError ? browser.i18n.getMessage('dlFailedMessage') : browser.i18n.getMessage('dlCompletedMsg')),
           type: dl.type,
-          created_at: new Date().toISOString(),
+          created_at: getFranceISOString(),
           read: false,
         };
       }),
@@ -175,7 +193,15 @@ browser.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   if (isTorrentFile) {
-    const urlObj = new URL(url);
+    let urlObj;
+    try {
+      urlObj = new URL(url);
+    } catch (err) {
+      console.warn('RD Manager: URL inválida para extração de origem:', err);
+      showBadge(false);
+      return;
+    }
+    
     const targetOrigin = `${urlObj.protocol}//${urlObj.host}/*`;
     
     try {
@@ -235,7 +261,7 @@ async function unrestrictLink(link) {
       size: data.filesize || 0,
       progress: 1,
       download_state: 'completed',
-      created_at: new Date().toISOString(),
+      created_at: getFranceISOString(),
       _type: 'web',
       _rd_download: data.download,
       _rd_link: data.link,
