@@ -113,14 +113,14 @@ function renderAddForm() {
         const validLinks = extractedLinks.filter(link => typeof link === 'string' && link.trim().startsWith('http'));
 
         if (validLinks.length === 0) {
-          toast('Nenhum link foi extraído do container.', 'error');
+          toast(i18n('noLinksExtracted'), 'error');
         } else {
-          renderDecodedLinks(validLinks);
+          await renderDecodedLinks(validLinks);
           return;
         }
       } catch (err) {
         console.warn('RD Manager: Falha ao processar container', err);
-        toast('Falha ao descriptografar o arquivo container.', 'error');
+        toast(i18n('failedDecryptContainer'), 'error');
       }
       
       submitBtn.disabled = false;
@@ -157,7 +157,10 @@ function renderAddForm() {
   setTimeout(() => magnetInput.focus(), 100);
 }
 
-function renderDecodedLinks(links) {
+async function renderDecodedLinks(links) {
+  const { rd_use_jdownloader } = await rdStorage.get('rd_use_jdownloader');
+  const isJdEnabled = rd_use_jdownloader === true;
+
   const ul = el('ul', {
     className: 'form-input',
     style: 'margin-top: 10px; max-height: 180px; overflow-y: auto; list-style: none; padding: 10px; margin-bottom: 0;'
@@ -194,12 +197,21 @@ function renderDecodedLinks(links) {
     });
   });
 
+  const jdBtnStyle = isJdEnabled 
+    ? 'width: 100%; justify-content: center; background: #5AD58A; color: #000; border: none;' 
+    : 'width: 100%; justify-content: center; background: #444; color: #999; border: none; cursor: not-allowed;';
+
   const jdBtn = el('button', {
     className: 'form-submit',
-    style: 'width: 100%; justify-content: center; background: #5AD58A; color: #000; border: none;'
+    style: jdBtnStyle
   }, i18n('exportJd2'));
 
   jdBtn.addEventListener('click', async () => {
+    if (!isJdEnabled) {
+      toast(i18n('jdIntegrationDisabled'), 'info');
+      return;
+    }
+
     if (jdBtn.classList.contains('loading')) return;
     jdBtn.classList.add('loading');
     jdBtn.style.opacity = '0.7';
