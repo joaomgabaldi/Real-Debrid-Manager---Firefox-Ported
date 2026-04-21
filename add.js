@@ -199,7 +199,7 @@ async function renderDecodedLinks(links) {
 
   const jdBtnStyle = isJdEnabled 
     ? 'width: 100%; justify-content: center; background: #5AD58A; color: #000; border: none;' 
-    : 'width: 100%; justify-content: center; background: #444; color: #999; border: none; cursor: not-allowed;';
+    : 'width: 100%; justify-content: center; background: #444; color: #000; opacity: 0.6; border: none; cursor: not-allowed;';
 
   const jdBtn = el('button', {
     className: 'form-submit',
