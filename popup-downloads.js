@@ -1169,7 +1169,7 @@ function triggerDownload(url, filename = '') {
           )
         );
 
-        openModalWithNode(i18n('jdUnresponsive'), body);
+        openModalWithNode(i18n('jdUnresponsive', state.jdPort), body);
 
         document.getElementById('btn-jd-no').addEventListener('click', () => closeModal());
         document.getElementById('btn-jd-yes').addEventListener('click', () => {
@@ -1456,4 +1456,6 @@ export function showWebLinkModal() {
       submitBtn.replaceChildren(i18n('unlock'), el('span', {className: 'btn-spinner'}));
     }
   });
+}
+
 }
