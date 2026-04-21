@@ -169,5 +169,8 @@
   "copyAllLinks": { "message": "Copy All" },
   "copySuccess": { "message": "Copied to clipboard!" },
   "back": { "message": "Back" },
-  "exportJd2": { "message": "Send to JD" }
+  "exportJd2": { "message": "Send to JD" },
+  "jdIntegrationDisabled": { "message": "Integration disabled. Enable JDownloader in the settings." },
+  "noLinksExtracted": { "message": "No links were extracted from the container." },
+  "failedDecryptContainer": { "message": "Failed to decrypt the container file." }
 }
