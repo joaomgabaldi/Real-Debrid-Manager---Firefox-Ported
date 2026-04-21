@@ -41,7 +41,14 @@
   "invalidDlLink": { "message": "Link de download inválido" },
   "sendingToJd": { "message": "Enviando para o JDownloader..." },
   "addedToJd": { "message": "Adicionado ao JDownloader!" },
-  "jdUnresponsive": { "message": "JDownloader não responde (porta 9666)" },
+  "jdUnresponsive": { 
+    "message": "JDownloader não responde (porta $PORT$)",
+    "placeholders": {
+      "port": {
+        "content": "$1"
+      }
+    }
+  },
   "jdFailedAskBrowser": { "message": "Não foi possível conectar ao JDownloader. Deseja baixar pelo navegador?" },
   "yes": { "message": "Sim" },
   "no": { "message": "Não" },
@@ -70,7 +77,14 @@
   "hoverLiftLabel": { "message": "Efeito de elevação ao passar o mouse" },
   "hoverLiftDesc": { "message": "Adiciona uma elevação sutil e sombra." },
   "jd2Label": { "message": "Enviar para o JDownloader" },
-  "jd2Desc": { "message": "Envia links para a porta 9666. O JD precisa estar aberto." },
+  "jd2Desc": { 
+    "message": "Envia links para a porta $PORT$. O JD precisa estar aberto.",
+    "placeholders": {
+      "port": {
+        "content": "$1"
+      }
+    }
+  },
   "jdPortLabel": { "message": "Porta do JDownloader" },
   "vlcLabel": { "message": "Abrir no VLC (via M3U)" },
   "vlcDesc": { "message": "Baixa um arquivo .m3u que abre automaticamente no VLC ou no seu player padrão." },
