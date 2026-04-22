@@ -85,6 +85,9 @@ async function deleteTorrentsSequentially(ids) {
       await sleep(500);
     } catch (err) {
       console.warn(`RD Manager: Falha ao deletar torrent ${id} em background:`, err);
+      if (err.message === 'Unauthenticated') {
+        break;
+      }
     }
   }
 }
