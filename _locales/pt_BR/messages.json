@@ -189,5 +189,8 @@
   "failedDecryptContainer": { "message": "Falha ao descriptografar o arquivo container." },
   "toggleSubtitles": { "message": "Alternar Legendas" },
   "subtitlesNoneLoaded": { "message": "Legendas (Nenhuma carregada)" },
-  "seedsLabel": { "message": "Seeds" }
+  "seedsLabel": { "message": "Seeds" },
+  "audio": { "message": "Áudio" },
+  "off": { "message": "Desativado" },
+  "track": { "message": "Faixa" }
 }
