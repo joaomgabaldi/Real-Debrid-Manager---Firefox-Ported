@@ -32,8 +32,8 @@ function cacheData(downloads) {
 
   const storageOptimized = cleaned.map(dl => {
     const copy = { ...dl };
-    if (copy.links && copy.links.length > 2) {
-      copy.links = copy.links.slice(0, 2);
+    if (copy.links && copy.links.length > 200) {
+      copy.links = copy.links.slice(0, 200);
     }
     if (copy.files && copy.files.length > 50) {
       copy.files = copy.files.slice(0, 50);
@@ -131,7 +131,7 @@ export async function fetchAll(isBackgroundSync = false) {
     const limit = 100;
     let hasMore = true;
     let latestCachedDate = 0;
-    const MAX_PAGES = 10;
+    const MAX_PAGES = 50;
     
     if (isBackgroundSync && state.allDownloads.length > 0) {
       latestCachedDate = new Date(state.allDownloads[0].created_at || 0).getTime();
@@ -234,7 +234,7 @@ export async function fetchAll(isBackgroundSync = false) {
     if (!isBackgroundSync) state.visibleCount = 50;
     
     renderDownloads();
-    preloadTorrentFiles();
+    await preloadTorrentFiles();
     await updateBellFromDownloads(state.allDownloads);
 
     enforceSelectionLock();
@@ -277,6 +277,11 @@ function normalizeTorrent(t) {
 function normalizeRdTimestamp(ts) {
   if (!ts) return null;
   let s = ts.trim().replace(' ', 'T');
+  if (s.endsWith('Z')) {
+    let d = new Date(s);
+    if (!isNaN(d)) return d.toISOString();
+    return null;
+  }
   let cleanStr = s.replace('Z', '');
   if (cleanStr.match(/[+-]\d{2}:?\d{2}$/)) {
     let d = new Date(cleanStr);
@@ -902,7 +907,7 @@ export async function fetchTorrentFiles(dl, itemEl) {
   }
 }
 
-function preloadTorrentFiles() {
+async function preloadTorrentFiles() {
   const visibleIds = new Set(state.currentFiltered.slice(0, state.visibleCount).map(d => String(d.id)));
   const needsInfo = state.allDownloads.filter(dl => visibleIds.has(String(dl.id)) && dl._type === 'torrent' && isCompleted(dl) && ((dl.files || []).length === 0 || (dl.links || []).length === 0));
   
@@ -912,7 +917,7 @@ function preloadTorrentFiles() {
   const BATCH_SIZE = 3;
   for (let i = 0; i < needsInfo.length; i += BATCH_SIZE) {
     const batch = needsInfo.slice(i, i + BATCH_SIZE);
-    Promise.allSettled(batch.map(async (dl) => {
+    await Promise.allSettled(batch.map(async (dl) => {
       try {
         const info = await apiGet(`/torrents/info/${dl.id}`);
         if (info) {
@@ -924,16 +929,18 @@ function preloadTorrentFiles() {
       } catch (err) {
         console.debug(`RD Manager: Preload torrent file infos falhou no ID ${dl.id}.`, err);
       }
-    })).then(() => {
-      if (changed) {
-        cacheData(state.allDownloads);
-        renderDownloads();
-      }
-    });
+    }));
+  }
+  
+  if (changed) {
+    cacheData(state.allDownloads);
+    renderDownloads();
   }
 }
 
 export async function deleteDownload(type, id) {
+  if (!confirm('Tem certeza que deseja excluir este item?')) return;
+
   const itemElement = globals.dlElementMap.get(String(id)) || document.querySelector(`.dl-delete-btn[data-id="${id}"]`)?.closest('.dl-item');
   if (itemElement) {
     itemElement.style.opacity = '0.5';
@@ -978,6 +985,8 @@ export async function deleteDownload(type, id) {
 export async function deleteSelected() {
   const selectedCbs = document.querySelectorAll('.dl-select-cb:checked');
   if (selectedCbs.length === 0) return;
+  if (!confirm(`Tem certeza que deseja excluir os ${selectedCbs.length} itens selecionados?`)) return;
+
   const idsToDelete = new Set(Array.from(selectedCbs).map(cb => cb.value));
   const targets = state.allDownloads.filter(d => idsToDelete.has(String(d.id)));
 
@@ -988,15 +997,6 @@ export async function deleteSelected() {
       e.style.transform = 'translateX(-10px)';
     }
   });
-
-  setTimeout(async () => {
-    state.allDownloads = state.allDownloads.filter(d => !idsToDelete.has(String(d.id)));
-    cacheData(state.allDownloads);
-    renderDownloads();
-    document.dispatchEvent(new CustomEvent('exit-selection-mode'));
-  }, 150);
-
-  toast(`${idsToDelete.size} ${i18n('itemsDeleted')}`, 'success');
 
   const webTargets = targets.filter(dl => dl._type === 'web');
   const torrentTargets = targets.filter(dl => dl._type === 'torrent');
@@ -1011,55 +1011,78 @@ export async function deleteSelected() {
   }
 
   if (torrentTargets.length > 0) {
-    browser.runtime.sendMessage({
-      action: 'delete-torrents',
-      ids: torrentTargets.map(dl => dl.id),
-    });
+    try {
+      await browser.runtime.sendMessage({
+        action: 'delete-torrents',
+        ids: torrentTargets.map(dl => dl.id),
+      });
+    } catch (err) {
+      toast('Falha na comunicação de deleção', 'error');
+      return;
+    }
   }
+
+  setTimeout(async () => {
+    state.allDownloads = state.allDownloads.filter(d => !idsToDelete.has(String(d.id)));
+    cacheData(state.allDownloads);
+    renderDownloads();
+    document.dispatchEvent(new CustomEvent('exit-selection-mode'));
+  }, 150);
+
+  toast(`${idsToDelete.size} ${i18n('itemsDeleted')}`, 'success');
+}
+
+async function resolveDownloadLink(type, id) {
+  const dl = state.allDownloads.find(d => String(d.id) === String(id));
+  if (!dl) throw new Error('not_found');
+
+  if (type === 'web' && dl._rd_download) {
+    return { url: dl._rd_download, filename: dl.name };
+  }
+
+  if (type === 'torrent') {
+    let links = dl.links || [];
+    if (links.length === 0) {
+      const info = await apiGet(`/torrents/info/${id}`);
+      links = info?.links || [];
+    }
+
+    if (links.length > 1) {
+      toast(i18n('multipleLinksExpand'), 'info');
+      const itemElement = globals.dlElementMap.get(String(id));
+      if (itemElement && !itemElement.classList.contains('expanded')) {
+        itemElement.classList.add('expanded');
+        if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
+          fetchTorrentFiles(dl, itemElement);
+        }
+      }
+      return null; 
+    }
+
+    if (links.length > 0) {
+      const unrestricted = await apiPost('/unrestrict/link', { link: links[0] });
+      if (unrestricted?.download) {
+        return { url: unrestricted.download, filename: dl.name };
+      }
+      throw new Error('failedDlLink');
+    } else {
+      throw new Error('noDlLink');
+    }
+  }
+  throw new Error('unknownDlType');
 }
 
 export async function downloadFile(type, id) {
   try {
-    const dl = state.allDownloads.find(d => String(d.id) === String(id));
-
-    if (type === 'web' && dl?._rd_download) {
-      triggerDownload(dl._rd_download, dl.name);
-      return;
-    }
-
-    if (type === 'torrent') {
-      let links = dl?.links || [];
-      if (links.length === 0) {
-        const info = await apiGet(`/torrents/info/${id}`);
-        links = info?.links || [];
-      }
-
-      if (links.length > 1) {
-        toast(i18n('multipleLinksExpand'), 'info');
-        const itemElement = globals.dlElementMap.get(String(id));
-        if (itemElement && !itemElement.classList.contains('expanded')) {
-          itemElement.classList.add('expanded');
-          if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
-            fetchTorrentFiles(dl, itemElement);
-          }
-        }
-        return;
-      }
-
-      if (links.length > 0) {
-        toast(i18n('startingDownload'), 'success');
-        const unrestricted = await apiPost('/unrestrict/link', { link: links[0] });
-        if (unrestricted?.download) triggerDownload(unrestricted.download, dl.name);
-        else toast(i18n('failedDlLink'), 'error');
-      } else {
-        toast(i18n('noDlLink'), 'error');
-      }
-      return;
-    }
-
-    toast(i18n('unknownDlType'), 'error');
+    const res = await resolveDownloadLink(type, id);
+    if (!res) return;
+    toast(i18n('startingDownload'), 'success');
+    triggerDownload(res.url, res.filename);
   } catch (err) {
     if (err.message === 'Unauthenticated') return;
+    if (err.message === 'failedDlLink') return toast(i18n('failedDlLink'), 'error');
+    if (err.message === 'noDlLink') return toast(i18n('noDlLink'), 'error');
+    if (err.message === 'unknownDlType') return toast(i18n('unknownDlType'), 'error');
     const msg = err.name === 'AbortError' ? i18n('dlTimeout') : i18n('dlFailed');
     toast(msg, 'error');
   }
@@ -1067,44 +1090,14 @@ export async function downloadFile(type, id) {
 
 export async function playFile(type, id) {
   try {
-    const dl = state.allDownloads.find(d => String(d.id) === String(id));
-
-    if (type === 'web' && dl?._rd_download) {
-      triggerPlay(dl._rd_download, dl.name);
-      return;
-    }
-
-    if (type === 'torrent') {
-      let links = dl?.links || [];
-      if (links.length === 0) {
-        const info = await apiGet(`/torrents/info/${id}`);
-        links = info?.links || [];
-      }
-
-      if (links.length > 1) {
-        toast(i18n('multipleLinksExpand'), 'info');
-        const itemElement = globals.dlElementMap.get(String(id));
-        if (itemElement && !itemElement.classList.contains('expanded')) {
-          itemElement.classList.add('expanded');
-          if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
-            fetchTorrentFiles(dl, itemElement);
-          }
-        }
-        return;
-      }
-
-      if (links.length > 0) {
-        toast(state.useVlc ? i18n('sendingToVlc') : i18n('startingStream'), 'success');
-        const unrestricted = await apiPost('/unrestrict/link', { link: links[0] });
-        if (unrestricted?.download) triggerPlay(unrestricted.download, dl.name);
-        else toast(i18n('failedDlLink'), 'error');
-      } else {
-        toast(i18n('noDlLink'), 'error');
-      }
-      return;
-    }
+    const res = await resolveDownloadLink(type, id);
+    if (!res) return;
+    toast(state.useVlc ? i18n('sendingToVlc') : i18n('startingStream'), 'success');
+    triggerPlay(res.url, res.filename);
   } catch (err) {
     if (err.message === 'Unauthenticated') return;
+    if (err.message === 'failedDlLink') return toast(i18n('failedDlLink'), 'error');
+    if (err.message === 'noDlLink') return toast(i18n('noDlLink'), 'error');
     toast(i18n('dlFailed'), 'error');
   }
 }
@@ -1254,6 +1247,14 @@ export async function openFileSelectionModal(torrentId) {
   }
 
   if (isCancelled) return;
+
+  if (attempts >= 60 && info && info.status === 'magnet_conversion') {
+    toast('Tempo limite excedido para conversão.', 'error');
+    addIgnoreLock(torrentId);
+    closeModal(true);
+    fetchAll();
+    return;
+  }
 
   if (!info || info.status === 'error' || info.status === 'dead') {
     toast(i18n('errorGetFiles'), 'error');
