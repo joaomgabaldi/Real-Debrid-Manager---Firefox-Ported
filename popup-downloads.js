@@ -1339,7 +1339,11 @@ export async function openFileSelectionModal(torrentId) {
   const newBody = el('div', {}, selectAllBtn, fileList, btnRow);
   
   const modalTitle = document.getElementById('modal-title');
-  if (modalTitle) modalTitle.textContent = i18n('selectFiles');
+  if (modalTitle) {
+    modalTitle.textContent = info.filename || i18n('selectFiles');
+    modalTitle.style.wordBreak = 'break-word';
+    modalTitle.style.whiteSpace = 'normal';
+  }
   const mBody = document.getElementById('modal-body');
   if (mBody) mBody.replaceChildren(newBody);
 }
