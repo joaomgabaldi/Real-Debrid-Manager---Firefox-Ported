@@ -42,12 +42,160 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('title').textContent = i18n('errorNoUrl');
   }
 
+  setupCustomControls(player);
   setupSubtitleDragAndDrop(player);
 });
+
+function setupCustomControls(video) {
+  const videoContainer = document.getElementById('drop-zone');
+  const btnPlayPause = document.getElementById('btn-play-pause');
+  const iconPlay = document.getElementById('icon-play');
+  const iconPause = document.getElementById('icon-pause');
+  const btnMute = document.getElementById('btn-mute');
+  const iconVolHigh = document.getElementById('icon-vol-high');
+  const iconVolMute = document.getElementById('icon-vol-mute');
+  const volumeSlider = document.getElementById('volume-slider');
+  const timeDisplay = document.getElementById('time-display');
+  const progressContainer = document.getElementById('progress-container');
+  const progressFilled = document.getElementById('progress-filled');
+  const btnFullscreen = document.getElementById('btn-fullscreen');
+  const iconFsEnter = document.getElementById('icon-fs-enter');
+  const iconFsExit = document.getElementById('icon-fs-exit');
+  
+  let idleTimeout;
+
+  // Lógica de inatividade (Ocultar cursor e controles)
+  const resetIdleTimer = () => {
+    videoContainer.classList.remove('idle');
+    clearTimeout(idleTimeout);
+    idleTimeout = setTimeout(() => {
+      if (!video.paused) {
+        videoContainer.classList.add('idle');
+      }
+    }, 2500);
+  };
+
+  videoContainer.addEventListener('mousemove', resetIdleTimer);
+  videoContainer.addEventListener('click', resetIdleTimer);
+  video.addEventListener('play', resetIdleTimer);
+  video.addEventListener('pause', () => videoContainer.classList.remove('idle'));
+
+  // Play/Pause
+  const togglePlay = () => {
+    if (video.paused) {
+      video.play();
+    } else {
+      video.pause();
+    }
+  };
+
+  btnPlayPause.addEventListener('click', togglePlay);
+  video.addEventListener('click', togglePlay);
+
+  video.addEventListener('play', () => {
+    iconPlay.style.display = 'none';
+    iconPause.style.display = 'block';
+  });
+
+  video.addEventListener('pause', () => {
+    iconPlay.style.display = 'block';
+    iconPause.style.display = 'none';
+  });
+
+  // Atualização de Progresso e Tempo
+  const formatTime = (timeInSeconds) => {
+    const result = new Date(timeInSeconds * 1000).toISOString().substr(11, 8);
+    return result.startsWith('00:') ? result.substr(3) : result;
+  };
+
+  const handleProgress = () => {
+    if (!video.duration) return;
+    const percent = (video.currentTime / video.duration) * 100;
+    progressFilled.style.width = `${percent}%`;
+    timeDisplay.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+  };
+
+  video.addEventListener('timeupdate', handleProgress);
+  video.addEventListener('loadedmetadata', handleProgress);
+
+  // Navegação pelo progresso (Seek)
+  progressContainer.addEventListener('click', (e) => {
+    const rect = progressContainer.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    video.currentTime = pos * video.duration;
+  });
+
+  // Volume
+  volumeSlider.addEventListener('input', (e) => {
+    video.volume = e.target.value;
+    video.muted = e.target.value === '0';
+  });
+
+  video.addEventListener('volumechange', () => {
+    volumeSlider.value = video.muted ? 0 : video.volume;
+    if (video.muted || video.volume === 0) {
+      iconVolHigh.style.display = 'none';
+      iconVolMute.style.display = 'block';
+    } else {
+      iconVolHigh.style.display = 'block';
+      iconVolMute.style.display = 'none';
+    }
+  });
+
+  btnMute.addEventListener('click', () => {
+    video.muted = !video.muted;
+  });
+
+  // Tela Cheia
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      // Solicitamos fullscreen no container para exibir os controles customizados junto
+      if (videoContainer.requestFullscreen) {
+        videoContainer.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  btnFullscreen.addEventListener('click', toggleFullscreen);
+  video.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    toggleFullscreen();
+  });
+
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement) {
+      iconFsEnter.style.display = 'none';
+      iconFsExit.style.display = 'block';
+    } else {
+      iconFsEnter.style.display = 'block';
+      iconFsExit.style.display = 'none';
+    }
+  });
+
+  // Legendas (CC) - Lógica do Botão
+  const btnCc = document.getElementById('btn-cc');
+  btnCc.addEventListener('click', () => {
+    if (video.textTracks && video.textTracks.length > 0) {
+      const track = video.textTracks[0];
+      if (track.mode === 'showing') {
+        track.mode = 'hidden';
+        btnCc.style.opacity = '0.5';
+      } else {
+        track.mode = 'showing';
+        btnCc.style.opacity = '1';
+      }
+    }
+  });
+}
 
 function setupSubtitleDragAndDrop(videoElement) {
   const dropZone = document.getElementById('drop-zone');
   const dragOverlay = document.getElementById('drag-overlay');
+  const btnCc = document.getElementById('btn-cc');
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -110,6 +258,10 @@ function setupSubtitleDragAndDrop(videoElement) {
 
       if (videoElement.textTracks && videoElement.textTracks.length > 0) {
         videoElement.textTracks[0].mode = 'showing';
+        // Habilita o botão CC visualmente na interface customizada
+        btnCc.classList.remove('disabled');
+        btnCc.title = 'Alternar Legendas';
+        btnCc.style.opacity = '1';
       }
     };
 
