@@ -64,7 +64,6 @@ function setupCustomControls(video) {
   
   let idleTimeout;
 
-  // Lógica de inatividade (Ocultar cursor e controles)
   const resetIdleTimer = () => {
     videoContainer.classList.remove('idle');
     clearTimeout(idleTimeout);
@@ -80,7 +79,6 @@ function setupCustomControls(video) {
   video.addEventListener('play', resetIdleTimer);
   video.addEventListener('pause', () => videoContainer.classList.remove('idle'));
 
-  // Play/Pause
   const togglePlay = () => {
     if (video.paused) {
       video.play();
@@ -102,7 +100,6 @@ function setupCustomControls(video) {
     iconPause.style.display = 'none';
   });
 
-  // Atualização de Progresso e Tempo
   const formatTime = (timeInSeconds) => {
     const result = new Date(timeInSeconds * 1000).toISOString().substr(11, 8);
     return result.startsWith('00:') ? result.substr(3) : result;
@@ -118,14 +115,12 @@ function setupCustomControls(video) {
   video.addEventListener('timeupdate', handleProgress);
   video.addEventListener('loadedmetadata', handleProgress);
 
-  // Navegação pelo progresso (Seek)
   progressContainer.addEventListener('click', (e) => {
     const rect = progressContainer.getBoundingClientRect();
     const pos = (e.clientX - rect.left) / rect.width;
     video.currentTime = pos * video.duration;
   });
 
-  // Volume
   volumeSlider.addEventListener('input', (e) => {
     video.volume = e.target.value;
     video.muted = e.target.value === '0';
@@ -146,10 +141,8 @@ function setupCustomControls(video) {
     video.muted = !video.muted;
   });
 
-  // Tela Cheia
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      // Solicitamos fullscreen no container para exibir os controles customizados junto
       if (videoContainer.requestFullscreen) {
         videoContainer.requestFullscreen();
       }
@@ -176,7 +169,6 @@ function setupCustomControls(video) {
     }
   });
 
-  // Legendas (CC) - Lógica do Botão
   const btnCc = document.getElementById('btn-cc');
   btnCc.addEventListener('click', () => {
     if (video.textTracks && video.textTracks.length > 0) {
@@ -221,7 +213,7 @@ function setupSubtitleDragAndDrop(videoElement) {
     const isVtt = fileName.endsWith('.vtt');
 
     if (!isSrt && !isVtt) {
-      alert(i18n('errorInvalidSubtitleFormat') || 'Formato inválido. Por favor, use um arquivo .SRT ou .VTT.');
+      alert(i18n('errorInvalidSubtitleFormat'));
       return;
     }
 
@@ -258,9 +250,8 @@ function setupSubtitleDragAndDrop(videoElement) {
 
       if (videoElement.textTracks && videoElement.textTracks.length > 0) {
         videoElement.textTracks[0].mode = 'showing';
-        // Habilita o botão CC visualmente na interface customizada
         btnCc.classList.remove('disabled');
-        btnCc.title = 'Alternar Legendas';
+        btnCc.title = i18n('toggleSubtitles');
         btnCc.style.opacity = '1';
       }
     };
