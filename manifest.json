@@ -1,96 +1,51 @@
-name: Build and Release Extension
-
-on:
-  workflow_dispatch:
-    inputs:
-      bump_type:
-        description: 'Tipo de incremento (build: 1.0.0.x, patch: 1.0.x, minor: 1.x.0, major: x.0.0)'
-        required: true
-        type: choice
-        options:
-          - build
-          - patch
-          - minor
-          - major
-      changelog:
-        description: 'Changelog: Descreva as alterações desta versão'
-        required: false
-        default: 'Atualizações e correções gerais.'
-        type: string
-
-permissions:
-  contents: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  build-and-release:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Calcular nova versão
-        id: calc_version
-        run: |
-          CURRENT_VERSION=$(jq -r '.version' manifest.json)
-          IFS='.' read -ra VER <<< "$CURRENT_VERSION"
-          
-          MAJOR="${VER[0]:-0}"
-          MINOR="${VER[1]:-0}"
-          PATCH="${VER[2]:-0}"
-          BUILD="${VER[3]:-0}"
-          
-          if [ "${{ github.event.inputs.bump_type }}" == "major" ]; then
-            MAJOR=$((MAJOR+1))
-            MINOR=0
-            PATCH=0
-            BUILD=0
-          elif [ "${{ github.event.inputs.bump_type }}" == "minor" ]; then
-            MINOR=$((MINOR+1))
-            PATCH=0
-            BUILD=0
-          elif [ "${{ github.event.inputs.bump_type }}" == "patch" ]; then
-            PATCH=$((PATCH+1))
-            BUILD=0
-          elif [ "${{ github.event.inputs.bump_type }}" == "build" ]; then
-            BUILD=$((BUILD+1))
-          fi
-          
-          if [ "$BUILD" -gt 0 ]; then
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH.$BUILD"
-          else
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          fi
-          
-          echo "Versão anterior detectada: $CURRENT_VERSION"
-          echo "Nova versão calculada: $NEW_VERSION"
-          
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-
-      - name: Update manifest.json version
-        run: |
-          jq '.version = "${{ env.NEW_VERSION }}"' manifest.json > manifest_tmp.json && mv manifest_tmp.json manifest.json
-
-      - name: Commit and Push updated manifest
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git commit -am "chore: atualiza versão do manifest para ${{ env.NEW_VERSION }}" || echo "Nenhuma mudança no manifest"
-          git push
-
-      - name: Create ZIP archive
-        run: |
-          zip -r release-${{ env.NEW_VERSION }}.zip . -x "README.md" -x ".git/*" -x ".github/*"
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ env.NEW_VERSION }}
-          name: Release v${{ env.NEW_VERSION }}
-          body: ${{ github.event.inputs.changelog }}
-          files: release-${{ env.NEW_VERSION }}.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "default_locale": "en",
+  "version": "1.2.5",
+  "description": "__MSG_extDesc__",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{4b8c9d1e-2f3a-4e5d-b6c7-8a9b0c1d2e4f}",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://api.real-debrid.com/*",
+    "http://127.0.0.1:9666/*"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "type": "module"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
