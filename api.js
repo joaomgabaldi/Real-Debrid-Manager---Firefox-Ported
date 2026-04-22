@@ -25,25 +25,30 @@ function handleUnauth(res) {
 async function fetchWithRateLimitRetry(url, options, maxRetries = 3, baseDelayMs = 1000) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(url, options);
-    if (res.status === 429 && attempt < maxRetries) {
-      const retryAfter = res.headers.get('Retry-After');
-      let delay = baseDelayMs * Math.pow(2, attempt);
-      
-      if (retryAfter) {
-        const parsedInt = parseInt(retryAfter, 10);
-        if (!isNaN(parsedInt) && String(parsedInt) === retryAfter.trim()) {
-          delay = parsedInt * 1000;
-        } else {
-          const parsedDate = Date.parse(retryAfter);
-          if (!isNaN(parsedDate)) {
-            delay = Math.max(0, parsedDate - Date.now());
+    
+    if (res.status === 429) {
+      if (attempt < maxRetries) {
+        const retryAfter = res.headers.get('Retry-After');
+        let delay = baseDelayMs * Math.pow(2, attempt);
+        
+        if (retryAfter) {
+          const parsedInt = parseInt(retryAfter, 10);
+          if (!isNaN(parsedInt) && String(parsedInt) === retryAfter.trim()) {
+            delay = parsedInt * 1000;
+          } else {
+            const parsedDate = Date.parse(retryAfter);
+            if (!isNaN(parsedDate)) {
+              delay = Math.max(0, parsedDate - Date.now());
+            }
           }
         }
+        
+        console.warn(`RD Manager: HTTP 429 Too Many Requests. Retrying in ${delay}ms (Attempt ${attempt + 1}/${maxRetries}).`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      } else {
+        throw new Error('Max retries exceeded: HTTP 429');
       }
-      
-      console.warn(`RD Manager: HTTP 429 Too Many Requests. Retrying in ${delay}ms (Attempt ${attempt + 1}/${maxRetries}).`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      continue;
     }
     return res;
   }
