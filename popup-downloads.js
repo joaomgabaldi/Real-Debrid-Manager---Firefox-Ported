@@ -939,8 +939,6 @@ async function preloadTorrentFiles() {
 }
 
 export async function deleteDownload(type, id) {
-  if (!confirm('Tem certeza que deseja excluir este item?')) return;
-
   const itemElement = globals.dlElementMap.get(String(id)) || document.querySelector(`.dl-delete-btn[data-id="${id}"]`)?.closest('.dl-item');
   if (itemElement) {
     itemElement.style.opacity = '0.5';
@@ -985,7 +983,6 @@ export async function deleteDownload(type, id) {
 export async function deleteSelected() {
   const selectedCbs = document.querySelectorAll('.dl-select-cb:checked');
   if (selectedCbs.length === 0) return;
-  if (!confirm(`Tem certeza que deseja excluir os ${selectedCbs.length} itens selecionados?`)) return;
 
   const idsToDelete = new Set(Array.from(selectedCbs).map(cb => cb.value));
   const targets = state.allDownloads.filter(d => idsToDelete.has(String(d.id)));
