@@ -66,13 +66,16 @@ async function scheduleAlarm() {
   browser.alarms.create(ALARM_NAME, { periodInMinutes: POLL_INTERVAL_MINUTES });
 }
 
-browser.runtime.onMessage.addListener((msg) => {
+browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg === 'rd-check-now') {
     scheduleAlarm();
     setTimeout(checkForCompletedDownloads, 1000);
   }
   if (msg?.action === 'delete-torrents' && Array.isArray(msg.ids)) {
-    deleteTorrentsSequentially(msg.ids);
+    deleteTorrentsSequentially(msg.ids).then(() => {
+      sendResponse({ success: true });
+    });
+    return true;
   }
 });
 
@@ -244,11 +247,19 @@ async function addMagnet(magnet) {
 }
 
 async function addTorrentFile(url) {
-  const fileRes = await fetch(url);
-  if (!fileRes.ok) throw new Error('Failed to fetch .torrent file');
-  const blob = await fileRes.blob();
-  const data = await apiPut('/torrents/addTorrent', blob);
-  if (data && data.id) await trackId(String(data.id));
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 15000);
+  try {
+    const fileRes = await fetch(url, { signal: controller.signal });
+    clearTimeout(id);
+    if (!fileRes.ok) throw new Error('Failed to fetch .torrent file');
+    const blob = await fileRes.blob();
+    const data = await apiPut('/torrents/addTorrent', blob);
+    if (data && data.id) await trackId(String(data.id));
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
+  }
 }
 
 async function unrestrictLink(link) {
