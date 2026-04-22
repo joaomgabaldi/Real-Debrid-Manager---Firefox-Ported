@@ -732,9 +732,39 @@ body {
   z-index: 0;
   pointer-events: none;
 }
+
 .dl-delete-btn:hover::after {
   opacity: 1;
 }
+
+.dl-delete-btn.holding::after {
+  opacity: 0;
+}
+
+.dl-delete-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--red);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.5s linear;
+  border-radius: 6px;
+  z-index: 0;
+}
+
+.dl-delete-btn.holding::before {
+  transform: scaleX(1);
+}
+
+.dl-delete-btn.no-transition::before {
+  transition: none;
+}
+
+.dl-delete-btn.holding {
+  color: #ffffff;
+}
+
 .dl-item.expanded {
   padding-bottom: 8px;
 }
