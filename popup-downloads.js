@@ -10,7 +10,8 @@ if (typeof document !== 'undefined' && !document.getElementById('rd-dynamic-styl
   style.id = 'rd-dynamic-styles';
   style.textContent = `
     .dl-item.download-mode .dl-file-item.dl-file-info { cursor: pointer !important; }
-    .dl-item.download-mode .dl-file-item.dl-file-info:hover .dl-file-name { text-decoration: underline !important; opacity: 1 !important; }
+    .dl-item.download-mode .dl-file-item.dl-file-info .dl-file-name { text-decoration: underline !important; }
+    .dl-item.download-mode .dl-file-item.dl-file-info:hover .dl-file-name { opacity: 1 !important; }
   `;
   document.head.appendChild(style);
 }
