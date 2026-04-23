@@ -5,6 +5,16 @@ import { i18n, formatBytes, toast, el, makeSvg, formatTimeAgo } from './utils.js
 import { openModalWithNode, closeModal } from './popup-modals.js';
 import { updateBellFromDownloads } from './popup-notifications.js';
 
+if (typeof document !== 'undefined' && !document.getElementById('rd-dynamic-styles')) {
+  const style = document.createElement('style');
+  style.id = 'rd-dynamic-styles';
+  style.textContent = `
+    .dl-item.download-mode .dl-file-item.dl-file-info { cursor: pointer !important; }
+    .dl-item.download-mode .dl-file-item.dl-file-info:hover .dl-file-name { text-decoration: underline !important; opacity: 1 !important; }
+  `;
+  document.head.appendChild(style);
+}
+
 function addIgnoreLock(id) {
   state.ignoreAutoLockIds.add(String(id));
   rdStorage.set({ rd_ignore_locks: Array.from(state.ignoreAutoLockIds) });
@@ -640,6 +650,7 @@ function renderExpandedContent(dl) {
       files.forEach((f, idx) => {
         const li = document.createElement('li');
         li.className = 'dl-file-item dl-file-info';
+        li.dataset.index = idx;
         li.title = fileBaseName(f.name || f.short_name || `${i18n('fileX')} ${idx + 1}`);
         li.style.cursor = 'default';
         const fnameEl = document.createElement('span');
@@ -1047,10 +1058,13 @@ async function resolveDownloadLink(type, id) {
     if (links.length > 1) {
       toast(i18n('multipleLinksExpand'), 'info');
       const itemElement = globals.dlElementMap.get(String(id));
-      if (itemElement && !itemElement.classList.contains('expanded')) {
-        itemElement.classList.add('expanded');
-        if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
-          fetchTorrentFiles(dl, itemElement);
+      if (itemElement) {
+        itemElement.classList.add('download-mode');
+        if (!itemElement.classList.contains('expanded')) {
+          itemElement.classList.add('expanded');
+          if ((dl.files || []).length === 0 || (dl.links || []).length === 0) {
+            fetchTorrentFiles(dl, itemElement);
+          }
         }
       }
       return null; 
@@ -1080,6 +1094,39 @@ export async function downloadFile(type, id) {
     if (err.message === 'failedDlLink') return toast(i18n('failedDlLink'), 'error');
     if (err.message === 'noDlLink') return toast(i18n('noDlLink'), 'error');
     if (err.message === 'unknownDlType') return toast(i18n('unknownDlType'), 'error');
+    const msg = err.name === 'AbortError' ? i18n('dlTimeout') : i18n('dlFailed');
+    toast(msg, 'error');
+  }
+}
+
+export async function downloadSpecificFile(id, fileIndex) {
+  try {
+    const dl = state.allDownloads.find(d => String(d.id) === String(id));
+    if (!dl) throw new Error('not_found');
+
+    let links = dl.links || [];
+    if (links.length === 0) {
+      const info = await apiGet(`/torrents/info/${id}`);
+      links = info?.links || [];
+    }
+
+    const link = links[fileIndex];
+    if (!link) throw new Error('noDlLink');
+
+    toast(i18n('startingDownload'), 'success');
+
+    const unrestricted = await apiPost('/unrestrict/link', { link });
+    if (unrestricted?.download) {
+      const fileInfo = (dl.files && dl.files[fileIndex]) || {};
+      const filename = fileInfo.short_name || fileInfo.name || dl.name;
+      triggerDownload(unrestricted.download, filename);
+    } else {
+      throw new Error('failedDlLink');
+    }
+  } catch (err) {
+    if (err.message === 'Unauthenticated') return;
+    if (err.message === 'failedDlLink') return toast(i18n('failedDlLink'), 'error');
+    if (err.message === 'noDlLink') return toast(i18n('noDlLink'), 'error');
     const msg = err.name === 'AbortError' ? i18n('dlTimeout') : i18n('dlFailed');
     toast(msg, 'error');
   }
