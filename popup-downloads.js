@@ -21,14 +21,7 @@ function addIgnoreLock(id) {
 }
 
 function cacheData(downloads) {
-  const thirtyDaysAgo = Date.now() - (30 * 86400000);
-  let cleaned = downloads.filter(d => {
-    if (d._type === 'web') return false;
-    if (isCompleted(d) && d.created_at) {
-      return new Date(d.created_at).getTime() > thirtyDaysAgo;
-    }
-    return true;
-  });
+  let cleaned = downloads.filter(d => d._type !== 'web');
 
   cleaned.sort((a, b) => {
     const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -36,8 +29,8 @@ function cacheData(downloads) {
     return dateB - dateA;
   });
 
-  if (cleaned.length > 1000) {
-    cleaned = cleaned.slice(0, 1000);
+  if (cleaned.length > 3000) {
+    cleaned = cleaned.slice(0, 3000);
   }
 
   const storageOptimized = cleaned.map(dl => {
