@@ -4,7 +4,7 @@ import { rdStorage } from './storage.js';
 import { i18n, localizeHtmlPage } from './utils.js';
 import { showAuthModal, forceLogout, pollDeviceCredentials } from './popup-auth.js';
 import { loadLocalNotifications, showNotificationsModal } from './popup-notifications.js';
-import { fetchAll, fetchUserInfo, renderDownloads, refreshInBackground, enforceSelectionLock, stopAutoRefresh, showState, deleteSelected, showWebLinkModal, downloadFile, playFile, deleteDownload, fetchTorrentFiles, openFileSelectionModal, isCompleted, showUserBar, updateAgeFilterUI, downloadSpecificFile } from './popup-downloads.js';
+import { fetchAll, fetchUserInfo, renderDownloads, refreshInBackground, enforceSelectionLock, stopAutoRefresh, showState, deleteSelected, showWebLinkModal, downloadFile, playFile, deleteDownload, fetchTorrentFiles, openFileSelectionModal, isCompleted, showUserBar, updateAgeFilterUI, downloadSpecificFile, playSpecificFile } from './popup-downloads.js';
 import { closeModal } from './popup-modals.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -376,6 +376,22 @@ function handleListClick(e) {
     return;
   }
 
+  const fileActionBtn = e.target.closest('.dl-file-action-btn');
+  if (fileActionBtn) {
+    const item = fileActionBtn.closest('.dl-item');
+    if (item) {
+      const fileIndex = parseInt(fileActionBtn.dataset.index, 10);
+      if (!isNaN(fileIndex)) {
+        if (fileActionBtn.dataset.action === 'play-file') {
+          playSpecificFile(item.dataset.id, fileIndex);
+        } else {
+          downloadSpecificFile(item.dataset.id, fileIndex);
+        }
+      }
+    }
+    return;
+  }
+
   const dlBtn = e.target.closest('.dl-download-btn');
   if (dlBtn) {
     if (dlBtn.dataset.action === 'select-files') {
@@ -393,18 +409,6 @@ function handleListClick(e) {
     const btn = fileItem.querySelector('.dl-file-download');
     if (btn) downloadFile(btn.dataset.type, btn.dataset.id);
     return;
-  }
-
-  const fileItemInfo = e.target.closest('.dl-file-item.dl-file-info');
-  if (fileItemInfo) {
-    const item = fileItemInfo.closest('.dl-item');
-    if (item && item.classList.contains('download-mode')) {
-      const fileIndex = parseInt(fileItemInfo.dataset.index, 10);
-      if (!isNaN(fileIndex)) {
-        downloadSpecificFile(item.dataset.id, fileIndex);
-      }
-      return;
-    }
   }
 
   const item = e.target.closest('.dl-item');
