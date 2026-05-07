@@ -89,7 +89,7 @@ async function refreshAccessToken(refreshToken, clientId, clientSecret) {
       client_id: clientId,
       client_secret: clientSecret,
       refresh_token: refreshToken,
-      grant_type: 'http://oauth.net/grant_type/device/1.0'
+      grant_type: 'refresh_token'
     }).toString()
   });
 
