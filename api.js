@@ -15,10 +15,11 @@ function triggerAuthFailure() {
 }
 
 function handleUnauth(res) {
-  if (res.status === 401 || res.status === 403) {
-    rdStorage.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
-    triggerAuthFailure();
+  if (res.status === 401) {
     throw new Error('Unauthenticated');
+  }
+  if (res.status === 403) {
+    throw new Error('Forbidden');
   }
 }
 
@@ -94,7 +95,7 @@ async function refreshAccessToken(refreshToken, clientId, clientSecret) {
   });
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       await rdStorage.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
       triggerAuthFailure();
       return null;
@@ -113,7 +114,7 @@ async function refreshAccessToken(refreshToken, clientId, clientSecret) {
   return tokenData.access_token;
 }
 
-export async function apiGet(endpoint, timeoutMs = 0) {
+export async function apiGet(endpoint, timeoutMs = 0, _isRetry = false) {
   const token = await getValidToken();
   if (!token) throw new Error('Unauthenticated');
 
@@ -121,29 +122,33 @@ export async function apiGet(endpoint, timeoutMs = 0) {
     headers: { 'Authorization': `Bearer ${token}` }
   };
 
+  let res;
   if (timeoutMs > 0) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
     fetchOptions.signal = controller.signal;
     try {
-      const res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
+      res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
       clearTimeout(id);
-      handleUnauth(res);
-      if (!res.ok) throw new Error(`API GET Error: ${res.status}`);
-      return res.json();
     } catch (err) {
       clearTimeout(id);
       throw err;
     }
   } else {
-    const res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
-    handleUnauth(res);
-    if (!res.ok) throw new Error(`API GET Error: ${res.status}`);
-    return res.json();
+    res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
   }
+
+  if (res.status === 401 && !_isRetry) {
+    await rdStorage.set({ rd_token_expires_at: 0 });
+    return await apiGet(endpoint, timeoutMs, true);
+  }
+
+  handleUnauth(res);
+  if (!res.ok) throw new Error(`API GET Error: ${res.status}`);
+  return res.json();
 }
 
-export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeoutMs = 0) {
+export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeoutMs = 0, _isRetry = false) {
   const token = await getValidToken();
   if (!token) throw new Error('Unauthenticated');
 
@@ -157,31 +162,34 @@ export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeo
 
   const fetchOptions = { method: 'POST', headers, body };
 
+  let res;
   if (timeoutMs > 0) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeoutMs);
     fetchOptions.signal = controller.signal;
     try {
-      const res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
+      res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
       clearTimeout(id);
-      handleUnauth(res);
-      if (!res.ok) throw new Error(`API POST Error: ${res.status}`);
-      const text = await res.text();
-      return text ? JSON.parse(text) : null;
     } catch (err) {
       clearTimeout(id);
       throw err;
     }
   } else {
-    const res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
-    handleUnauth(res);
-    if (!res.ok) throw new Error(`API POST Error: ${res.status}`);
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
+    res = await fetchWithRateLimitRetry(`${API_BASE}${endpoint}`, fetchOptions);
   }
+
+  if (res.status === 401 && !_isRetry) {
+    await rdStorage.set({ rd_token_expires_at: 0 });
+    return await apiPost(endpoint, bodyData, isFormUrlEncoded, timeoutMs, true);
+  }
+
+  handleUnauth(res);
+  if (!res.ok) throw new Error(`API POST Error: ${res.status}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
-export async function apiPut(endpoint, blobData, contentType = null) {
+export async function apiPut(endpoint, blobData, contentType = null, _isRetry = false) {
   const token = await getValidToken();
   if (!token) throw new Error('Unauthenticated');
 
@@ -197,6 +205,11 @@ export async function apiPut(endpoint, blobData, contentType = null) {
     body: blobData
   });
 
+  if (res.status === 401 && !_isRetry) {
+    await rdStorage.set({ rd_token_expires_at: 0 });
+    return await apiPut(endpoint, blobData, contentType, true);
+  }
+
   handleUnauth(res);
 
   if (!res.ok) throw new Error(`API PUT Error: ${res.status}`);
@@ -204,7 +217,7 @@ export async function apiPut(endpoint, blobData, contentType = null) {
   return text ? JSON.parse(text) : null;
 }
 
-export async function apiDelete(endpoint) {
+export async function apiDelete(endpoint, _isRetry = false) {
   const token = await getValidToken();
   if (!token) throw new Error('Unauthenticated');
 
@@ -212,6 +225,11 @@ export async function apiDelete(endpoint) {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${token}` }
   });
+
+  if (res.status === 401 && !_isRetry) {
+    await rdStorage.set({ rd_token_expires_at: 0 });
+    return await apiDelete(endpoint, true);
+  }
 
   handleUnauth(res);
 
