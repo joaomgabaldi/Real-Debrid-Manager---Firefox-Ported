@@ -122,6 +122,9 @@ export function enforceSelectionLock() {
 export async function fetchAll(isBackgroundSync = false) {
   if (state.isFetchingAll) {
     state.pendingFetch = true;
+    if (state.pendingFetchIsBg === undefined || isBackgroundSync === false) {
+      state.pendingFetchIsBg = isBackgroundSync;
+    }
     return;
   }
   state.isFetchingAll = true;
@@ -258,7 +261,9 @@ export async function fetchAll(isBackgroundSync = false) {
     state.isFetchingAll = false;
     if (state.pendingFetch) {
       state.pendingFetch = false;
-      fetchAll(isBackgroundSync);
+      const nextBg = state.pendingFetchIsBg !== undefined ? state.pendingFetchIsBg : isBackgroundSync;
+      state.pendingFetchIsBg = undefined;
+      fetchAll(nextBg);
     }
   }
 }
@@ -986,7 +991,7 @@ export async function deleteDownload(type, id) {
 
   try {
     if (type === 'torrent') {
-      toast(i18n('deleting'), 'success');
+      toast(i18n('deleting'), 'info');
       await apiDelete(`/torrents/delete/${id}`);
     } else if (type === 'web') {
       const rd_local_downloads = await rdStorage.getLocalDownloads();
