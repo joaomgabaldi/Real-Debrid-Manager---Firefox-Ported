@@ -77,8 +77,6 @@ function renderAddForm() {
       fileInput.value = '';
       selectedFile = null;
       fileName.textContent = '';
-    } else {
-      magnetInput.disabled = false;
     }
   });
 
