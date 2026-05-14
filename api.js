@@ -13,6 +13,7 @@ export async function logDebug(event, data = {}) {
     logs.unshift({ timestamp: new Date().toISOString(), event, data });
     await rdStorage.set({ rd_debug_logs: logs.slice(0, 30) });
   } catch (e) {
+    // Ignora falhas de I/O no log
   }
 }
 
@@ -178,8 +179,13 @@ export async function apiGet(endpoint, timeoutMs = 0, _isRetry = false) {
   }
 
   handleUnauth(res, endpoint);
-  if (!res.ok) throw new Error(`API GET Error: ${res.status}`);
-  return res.json();
+  
+  if (!res.ok && res.status !== 451) throw new Error(`API GET Error: ${res.status}`);
+  
+  const data = await res.json();
+  // Se for erro nativo (ex: bad_token), mantemos o break, mas permitimos arrays retornados em 451.
+  if (res.status === 451 && data.error) throw new Error(`API GET Error: 451 - ${data.error}`);
+  return data;
 }
 
 export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeoutMs = 0, _isRetry = false) {
@@ -219,9 +225,13 @@ export async function apiPost(endpoint, bodyData, isFormUrlEncoded = true, timeo
   }
 
   handleUnauth(res, endpoint);
-  if (!res.ok) throw new Error(`API POST Error: ${res.status}`);
+
+  if (!res.ok && res.status !== 451) throw new Error(`API POST Error: ${res.status}`);
   const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  if (!text) return null;
+  const data = JSON.parse(text);
+  if (res.status === 451 && data.error) throw new Error(`API POST Error: 451 - ${data.error}`);
+  return data;
 }
 
 export async function apiPut(endpoint, blobData, contentType = null, _isRetry = false) {
@@ -248,9 +258,12 @@ export async function apiPut(endpoint, blobData, contentType = null, _isRetry = 
 
   handleUnauth(res, endpoint);
 
-  if (!res.ok) throw new Error(`API PUT Error: ${res.status}`);
+  if (!res.ok && res.status !== 451) throw new Error(`API PUT Error: ${res.status}`);
   const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  if (!text) return null;
+  const data = JSON.parse(text);
+  if (res.status === 451 && data.error) throw new Error(`API PUT Error: 451 - ${data.error}`);
+  return data;
 }
 
 export async function apiDelete(endpoint, _isRetry = false) {
@@ -270,7 +283,7 @@ export async function apiDelete(endpoint, _isRetry = false) {
 
   handleUnauth(res, endpoint);
 
-  if (!res.ok) throw new Error(`API DELETE Error: ${res.status}`);
+  if (!res.ok && res.status !== 451) throw new Error(`API DELETE Error: ${res.status}`);
   return true;
 }
 
