@@ -13,7 +13,6 @@ export async function logDebug(event, data = {}) {
     logs.unshift({ timestamp: new Date().toISOString(), event, data });
     await rdStorage.set({ rd_debug_logs: logs.slice(0, 30) });
   } catch (e) {
-    // Ignora falhas de I/O no log
   }
 }
 
@@ -100,22 +99,31 @@ export async function getValidToken() {
 }
 
 async function refreshAccessToken(refreshToken, clientId, clientSecret) {
+  const payload = {
+    client_id: clientId,
+    client_secret: clientSecret,
+    code: refreshToken,
+    grant_type: 'http://oauth.net/grant_type/device/1.0'
+  };
+
+  await logDebug('REFRESH_PAYLOAD_CHECK', { 
+    has_client_id: !!clientId, 
+    has_client_secret: !!clientSecret, 
+    has_refresh_token: !!refreshToken,
+    grant_type_sent: payload.grant_type
+  });
+
   const res = await fetch(`${OAUTH_BASE}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token'
-    }).toString()
+    body: new URLSearchParams(payload).toString()
   });
 
   if (!res.ok) {
     const errorText = await res.text().catch(() => 'No body text');
     await logDebug('REFRESH_HTTP_ERROR', { status: res.status, body: errorText });
     
-    if (res.status === 401) {
+    if (res.status === 401 || res.status === 400 || res.status === 403) {
       await rdStorage.remove(['rd_access_token', 'rd_refresh_token', 'rd_token_expires_at']);
       triggerAuthFailure();
       return null;
