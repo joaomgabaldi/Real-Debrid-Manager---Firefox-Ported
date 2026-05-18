@@ -1,3 +1,5 @@
+globalThis.browser = globalThis.browser || globalThis.chrome;
+
 import { getValidToken, apiGet, apiPost, apiPut, apiDelete, trackId, onAuthFailure } from './api.js';
 import { rdStorage } from './storage.js';
 
