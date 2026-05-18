@@ -1,3 +1,5 @@
+globalThis.browser = globalThis.browser || globalThis.chrome;
+
 export function i18n(key, ...args) {
   const msg = browser.i18n.getMessage(key, args);
   return msg || key;
