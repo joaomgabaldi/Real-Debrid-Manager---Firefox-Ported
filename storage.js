@@ -1,3 +1,5 @@
+globalThis.browser = globalThis.browser || globalThis.chrome;
+
 export const rdStorage = {
   get: (keys) => browser.storage.local.get(keys),
   set: (data) => browser.storage.local.set(data),
