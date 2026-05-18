@@ -1251,6 +1251,12 @@ function triggerDownload(url, filename = '') {
       formData.append('urls', url);
       formData.append('autostart', '1');
       if (filename) formData.append('package', filename);
+      
+      formData.append('referer', url);
+      formData.append('referrer', url);
+      
+      const extensionSource = typeof browser !== 'undefined' && browser.runtime && browser.runtime.id ? browser.runtime.id : 'rd-manager';
+      formData.append('source', extensionSource);
 
       fetch(`http://127.0.0.1:${state.jdPort}/flashgot`, {
         method: 'POST',
