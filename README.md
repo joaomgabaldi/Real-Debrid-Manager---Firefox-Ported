@@ -19,11 +19,19 @@ Este projeto surgiu como um port da extensão "Real-Debrid Lite" (Chrome), mas f
 
 - [x] Adição de links Magnet e arquivos `.torrent` via janela popup dedicada (evitando perda de foco do navegador).
 - [x] Seleção manual de arquivos dentro de um pacote torrent antes do início do download.
+- [x] Desbloqueio de links premium (Hosters) em lote diretamente pela extensão.
+- [x] Streaming de vídeo integrado no navegador ou envio externo para o VLC Media Player (via geração de `.m3u`).
+- [x] Visualização detalhada e expansível dos arquivos internos de pacotes torrent já concluídos.
+- [x] Gestão em lote para seleção de múltiplos itens e exclusão simultânea (executada em background).
+- [x] Integração avançada com o JDownloader 2 (com suporte à autorização permanente no sistema *Extern Interface Auth*).
+- [x] Exibição rápida do status da conta (tipo de plano e dias restantes de assinatura Premium).
 - [x] Sistema de notificações nativas para conclusão de downloads em tempo real.
-- [x] Filtros avançados por idade do arquivo (1 dia, 1 semana, 1 mês).
-- [x] Busca instantânea no histórico de downloads.
+- [x] Filtros avançados e navegação por abas de status, tipo de arquivo e idade (1 dia, 1 semana, 1 mês).
+- [x] Busca instantânea no histórico completo de downloads.
+- [x] Menu de contexto integrado para envio rápido de links de qualquer página.
+- [x] Sincronização em segundo plano e atualização automática de status (auto-refresh dinâmico).
 - [x] Suporte completo a Temas Claro e Escuro.
-- [x] Menu de contexto para envio rápido de links.
+- [x] Internacionalização com suporte nativo a múltiplos idiomas (Português, Inglês e Espanhol).
 
 ## 📦 Instalação
 
