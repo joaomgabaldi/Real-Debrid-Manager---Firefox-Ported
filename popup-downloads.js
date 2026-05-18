@@ -1,3 +1,5 @@
+globalThis.browser = globalThis.browser || globalThis.chrome;
+
 import { state, globals, DOM } from './popup-state.js';
 import { apiGet, apiPost, apiDelete, trackId, getValidToken } from './api.js';
 import { rdStorage } from './storage.js';
