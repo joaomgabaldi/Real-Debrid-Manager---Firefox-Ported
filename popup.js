@@ -355,13 +355,20 @@ function bindEvents() {
     }
   });
 
+  let scrollTicking = false;
   DOM.$('#downloads-container').addEventListener('scroll', (e) => {
-    const el = e.target;
-    if (el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
-      if (state.visibleCount < state.currentFiltered.length) {
-        state.visibleCount += 50;
-        renderDownloads();
-      }
+    if (!scrollTicking) {
+      window.requestAnimationFrame(() => {
+        const el = e.target;
+        if (el.scrollHeight - el.scrollTop <= el.clientHeight + 100) {
+          if (state.visibleCount < state.currentFiltered.length) {
+            state.visibleCount += 50;
+            renderDownloads();
+          }
+        }
+        scrollTicking = false;
+      });
+      scrollTicking = true;
     }
   });
 }
